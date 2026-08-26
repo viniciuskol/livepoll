@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Telão · Pódio — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="stage">
+  <header class="stage-top">
+    <span class="room-code">QDSKCH</span>
+    <span class="qr-mini" data-qr="QDSKCH"></span>
+    <div class="stage-meta">
+      <span class="chip hide-sm">📦 Bloco 2 · Aprofundando</span>
+      <span class="chip">Sessão encerrada</span>
+      <span class="chip"><span class="dot"></span> <b>9</b>&nbsp;na sala</span>
+    </div>
+  </header>
+
+  <section class="scene" aria-live="polite">
+    <div class="podium-grid">
+      <div>
+        <div class="champion">
+          <span class="eyebrow">🏆 Campeã da noite</span>
+          <div class="who">🦊 Ana</div>
+        </div>
+        <div class="podium">
+          <div class="pod p2">
+            <div class="medal">🥈</div><span class="av">🐙</span>
+            <div class="name">Chris</div><div class="score" data-v="7188">0</div>
+          </div>
+          <div class="pod p1">
+            <div class="medal">🥇</div><span class="av">🦊</span>
+            <div class="name">Ana</div><div class="score" data-v="7412">0</div>
+          </div>
+          <div class="pod p3">
+            <div class="medal">🥉</div><span class="av">🦄</span>
+            <div class="name">Duda</div><div class="score" data-v="7104">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack gap-m">
+        <span class="eyebrow tc">Resumo da sala</span>
+        <div class="stats">
+          <div class="stat"><div class="v" data-v="8">0</div><div class="k">Perguntas</div></div>
+          <div class="stat"><div class="v" data-v="9">0</div><div class="k">Participantes</div></div>
+          <div class="stat"><div class="v">🔥 <span data-v="5">0</span></div><div class="k">Maior sequência · Ana</div></div>
+          <div class="stat"><div class="v"><span data-v="74">0</span>%</div><div class="k">Acerto da sala</div></div>
+        </div>
+        <div class="stat" style="grid-column:1/-1">
+          <div class="v" data-v="3">0</div>
+          <div class="k">Rodadas perfeitas</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="stage-bottom">
+    <div class="progress"><i style="width:100%"></i></div>
+    <div class="stage-actions">
+      <button class="btn btn-icon" data-back data-href="stage-leaderboard.html" title="Voltar (←)" aria-label="Voltar">←</button>
+      <button class="btn btn-primary btn-lg" data-primary id="end">
+        Encerrar e voltar ao início <span class="kbd">Espaço</span>
+      </button>
+      <button class="btn btn-icon" data-fullscreen title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
+      <button class="btn btn-icon" data-sfx-toggle title="Som (M)" aria-label="Som">🔊</button>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+LP.stageKeys({});
+
+// Encerrar e irreversivel diante da plateia: pede o segundo toque.
+let armedEnd = false, endTimer;
+document.getElementById('end').addEventListener('click', () => {
+  if (armedEnd) { LP.go('index.html'); return; }
+  armedEnd = true;
+  LP.toast('Aperte Espaço de novo para encerrar');
+  clearTimeout(endTimer);
+  endTimer = setTimeout(() => { armedEnd = false; }, 4000);
+});
+LP.confetti(7000);
+LP.SFX.fanfare();
+document.querySelectorAll('[data-v]').forEach((el, i) => {
+  const d = LP.reduced ? 0 : 500 + i * 160;
+  setTimeout(() => LP.countUp(el, Number(el.dataset.v), 1100), d);
+});
+</script>
+</body>
+</html>

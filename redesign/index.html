@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LivePoll — Neon Arena</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body class="scrollable">
+
+<div class="page">
+  <nav class="nav">
+    <a class="logo" href="index.html" data-go><span class="mark"></span> LivePoll</a>
+    <div class="right">
+      <div class="lang" role="group" aria-label="Idioma">
+        <button aria-pressed="false">EN</button>
+        <button aria-pressed="false">ES</button>
+        <button aria-pressed="true">PT</button>
+      </div>
+      <button class="btn btn-icon" data-sfx-toggle aria-label="Som">🔊</button>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <span class="eyebrow">Quiz ao vivo · sem cadastro · roda local</span>
+    <h1>A sala inteira jogando<br>ao mesmo tempo</h1>
+    <p class="lead">Suba uma planilha, projete o telão e deixe todo mundo entrar pelo
+      celular com um código de 6 letras. Pontos por velocidade, streak em chamas
+      e um pódio que fecha a apresentação com confete.</p>
+
+    <div class="cta-cards">
+      <a class="cta-card" href="host-create.html" data-go>
+        <span class="ico">🎬</span>
+        <h3>Criar uma sala</h3>
+        <p>Você comanda: envie suas perguntas, projete o telão e conduza a partida
+           pelo teclado, como um slide deck.</p>
+        <span class="btn btn-primary btn-lg">Começar <span aria-hidden="true">→</span></span>
+      </a>
+      <a class="cta-card" href="play-join.html" data-go>
+        <span class="ico">📱</span>
+        <h3>Entrar na sala</h3>
+        <p>Tem um código? Escaneie o QR ou digite as 6 letras e jogue pelo celular
+           em segundos. Sem app, sem conta.</p>
+        <span class="btn btn-lg">Entrar <span aria-hidden="true">→</span></span>
+      </a>
+    </div>
+  </header>
+
+  <h2 class="section-title">Protótipo navegável · todas as telas</h2>
+  <div class="screens">
+    <a class="screen-link" href="host-create.html" data-go><span class="n">01</span> 🎬 Criar sala</a>
+    <a class="screen-link" href="stage-lobby.html" data-go><span class="n">02</span> 🖥️ Telão · lobby</a>
+    <a class="screen-link" href="stage-reading.html" data-go><span class="n">03</span> 🖥️ Telão · leitura</a>
+    <a class="screen-link" href="stage-answering.html" data-go><span class="n">04</span> 🖥️ Telão · resposta</a>
+    <a class="screen-link" href="stage-reveal.html" data-go><span class="n">05</span> 🖥️ Telão · reveal</a>
+    <a class="screen-link" href="stage-leaderboard.html" data-go><span class="n">06</span> 🖥️ Telão · ranking</a>
+    <a class="screen-link" href="stage-block-intro.html" data-go><span class="n">07</span> 🖥️ Telão · bloco</a>
+    <a class="screen-link" href="stage-podium.html" data-go><span class="n">08</span> 🏆 Telão · pódio</a>
+    <a class="screen-link" href="play-join.html" data-go><span class="n">09</span> 📱 Celular · entrar</a>
+    <a class="screen-link" href="play-lobby.html" data-go><span class="n">10</span> 📱 Celular · lobby</a>
+    <a class="screen-link" href="play-reading.html" data-go><span class="n">11</span> 📱 Celular · leitura</a>
+    <a class="screen-link" href="play-answering.html" data-go><span class="n">12</span> 📱 Celular · resposta</a>
+    <a class="screen-link" href="play-reveal.html" data-go><span class="n">13</span> 📱 Celular · reveal</a>
+    <a class="screen-link" href="play-leaderboard.html" data-go><span class="n">14</span> 📱 Celular · ranking</a>
+    <a class="screen-link" href="play-summary.html" data-go><span class="n">15</span> 📱 Celular · resumo</a>
+    <a class="screen-link" href="stage-shortcuts.html" data-go><span class="n">16</span> ⌨️ Telão · atalhos</a>
+  </div>
+
+  <h2 class="section-title">Os outros tipos de pergunta</h2>
+  <div class="screens">
+    <a class="screen-link" href="stage-answering-tf.html" data-go><span class="n">17</span> 🖥️ Telão · verdadeiro/falso</a>
+    <a class="screen-link" href="stage-reveal-tf.html" data-go><span class="n">18</span> 🖥️ Telão · reveal V/F</a>
+    <a class="screen-link" href="stage-answering-multi.html" data-go><span class="n">19</span> 🖥️ Telão · múltipla seleção</a>
+    <a class="screen-link" href="stage-reveal-multi.html" data-go><span class="n">20</span> 🖥️ Telão · reveal parcial</a>
+    <a class="screen-link" href="stage-answering-open.html" data-go><span class="n">21</span> 🖥️ Telão · resposta aberta</a>
+    <a class="screen-link" href="stage-grading.html" data-go><span class="n">22</span> ✍️ Telão · correção manual</a>
+    <a class="screen-link" href="stage-reveal-open.html" data-go><span class="n">23</span> 🖥️ Telão · reveal aberta</a>
+    <a class="screen-link" href="play-answering-tf.html" data-go><span class="n">24</span> 📱 Celular · verdadeiro/falso</a>
+    <a class="screen-link" href="play-answering-multi.html" data-go><span class="n">25</span> 📱 Celular · múltipla seleção</a>
+    <a class="screen-link" href="play-answering-open.html" data-go><span class="n">26</span> 📱 Celular · resposta aberta</a>
+    <a class="screen-link" href="play-reveal-partial.html" data-go><span class="n">27</span> 📱 Celular · acerto parcial</a>
+  </div>
+</div>
+
+<script src="assets/neon.js"></script>
+</body>
+</html>

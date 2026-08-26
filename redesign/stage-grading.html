@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Telão · Correção — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="stage">
+  <header class="stage-top">
+    <span class="room-code">QDSKCH</span>
+    <span class="qr-mini" data-qr="QDSKCH"></span>
+    <div class="stage-meta">
+      <span class="chip hide-sm">✍️ Correção manual · tecla G</span>
+      <span class="chip">Pergunta <b>7</b> de <b>8</b></span>
+      <span class="chip"><span class="dot"></span> <b>9</b>&nbsp;na sala</span>
+    </div>
+  </header>
+
+  <section class="scene" data-fit-box>
+    <div class="q-head">
+      <h1 class="question">Cite uma missão que pousou em Marte.</h1>
+    </div>
+    <span class="grade-note" id="note">
+      Respostas agrupadas por texto normalizado. Marque as que valem — a
+      pontuação é aplicada uma única vez, mesmo se você clicar duas.
+      <b>Tab</b> percorre · <b>↓</b> rola a lista.
+    </span>
+
+    <div class="grading" id="grading" tabindex="0" role="group"
+         aria-label="Grupos de respostas para corrigir"
+         style="margin-top:clamp(10px,1.8vh,20px)">
+      <div class="grade-row marked">
+        <span>Perseverance</span>
+        <span class="who-count">3 pessoas · 🦊 Ana · 🐙 Chris · 🦉 Théo</span>
+        <button class="toggle" aria-pressed="true">✓ Vale</button>
+      </div>
+      <div class="grade-row marked">
+        <span>Curiosity</span>
+        <span class="who-count">2 pessoas · 🦄 Duda · 🐨 Iris</span>
+        <button class="toggle" aria-pressed="true">✓ Vale</button>
+      </div>
+      <div class="grade-row marked">
+        <span>curiosity rover</span>
+        <span class="who-count">1 pessoa · 🐧 Enzo</span>
+        <button class="toggle" aria-pressed="true">✓ Vale</button>
+      </div>
+      <div class="grade-row">
+        <span>Voyager</span>
+        <span class="who-count">2 pessoas</span>
+        <button class="toggle" aria-pressed="false">Marcar como certa</button>
+      </div>
+      <div class="grade-row">
+        <span>não sei 😅</span>
+        <span class="who-count">1 pessoa</span>
+        <button class="toggle" aria-pressed="false">Marcar como certa</button>
+      </div>
+      <div class="scroll-hint" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <footer class="stage-bottom">
+    <div class="progress"><i style="width:82%"></i></div>
+    <div class="stage-actions">
+      <button class="btn btn-icon" data-back data-href="stage-answering-open.html" title="Voltar (←)" aria-label="Voltar">←</button>
+      <button class="btn btn-primary btn-lg" data-primary data-href="stage-reveal-open.html">
+        Aplicar e revelar <span class="kbd">Espaço</span>
+      </button>
+      <button class="btn btn-icon" data-fullscreen title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
+      <button class="btn btn-icon" data-sfx-toggle title="Som (M)" aria-label="Som">🔊</button>
+      <a class="btn btn-icon" href="stage-shortcuts.html" data-go title="Atalhos (?)" aria-label="Atalhos">⌨</a>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+LP.stageKeys({ shortcuts: 'stage-shortcuts.html', grading: 'stage-grading.html' });
+document.getElementById('grading').addEventListener('click', e => {
+  const b = e.target.closest('.toggle');
+  if (!b) return;
+  const on = b.getAttribute('aria-pressed') !== 'true';
+  b.setAttribute('aria-pressed', String(on));
+  b.textContent = on ? '✓ Vale' : 'Marcar como certa';
+  b.closest('.grade-row').classList.toggle('marked', on);
+  LP.SFX.pick();
+});
+
+// A lista rola, mas o container com botoes sai da ordem de tabulacao do
+// Chrome — sem isto, os grupos abaixo da dobra existem so para o mouse.
+const g = document.getElementById('grading');
+g.addEventListener('keydown', e => {
+  const step = g.clientHeight * 0.8;
+  const map = { ArrowDown: 80, ArrowUp: -80, PageDown: step, PageUp: -step };
+  if (e.key in map) { e.preventDefault(); g.scrollBy({ top: map[e.key] }); }
+  else if (e.key === 'Home') { e.preventDefault(); g.scrollTo({ top: 0 }); }
+  else if (e.key === 'End') { e.preventDefault(); g.scrollTo({ top: g.scrollHeight }); }
+});
+// diz quantos grupos existem e se ha mais abaixo da dobra
+function tally() {
+  const rows = g.querySelectorAll('.grade-row');
+  const visible = Math.floor(g.clientHeight / (rows[0] ? rows[0].offsetHeight + 12 : 80));
+  const hint = g.querySelector('.scroll-hint');
+  const more = g.scrollHeight > g.clientHeight + 4;
+  if (hint) hint.style.display = more ? '' : 'none';
+  if (more) {
+    document.getElementById('note').innerHTML =
+      'Mostrando <b>' + Math.min(visible, rows.length) + '</b> de <b>' + rows.length +
+      '</b> grupos · <b>↓</b> rola a lista · a pontuação é aplicada uma única vez.';
+  }
+}
+requestAnimationFrame(tally);
+addEventListener('resize', tally);
+</script>
+</body>
+</html>

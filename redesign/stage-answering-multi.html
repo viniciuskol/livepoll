@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Telão · Múltipla seleção — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="stage">
+  <header class="stage-top">
+    <span class="room-code">QDSKCH</span>
+    <span class="qr-mini" data-qr="QDSKCH"></span>
+    <div class="stage-meta">
+      <span class="chip hide-sm">📦 Bloco 2 · Aprofundando</span>
+      <span class="chip">Pergunta <b>6</b> de <b>8</b></span>
+      <span class="chip"><span class="dot"></span> <b>9</b>&nbsp;na sala</span>
+    </div>
+  </header>
+
+  <section class="scene vcenter" data-fit-box>
+    <div class="q-head">
+      <span class="eyebrow">Múltipla seleção · pontuação parcial</span>
+      <h1 class="question">Quais destes são gigantes gasosos?</h1>
+    </div>
+
+    <!-- a instrução de quantas marcar precisa estar no telão: é a regra do jogo -->
+    <span class="multi-hint">☑️ Marque <b>2</b> · acertos somam, erros descontam</span>
+
+    <div class="options" role="list" style="margin-top:clamp(8px,1.4vh,16px)">
+      <div class="opt a" role="listitem">
+        <span class="shape tri"></span><span class="txt">Júpiter</span>
+        <span class="check" aria-hidden="true">✓</span>
+      </div>
+      <div class="opt b" role="listitem">
+        <span class="shape dia"></span><span class="txt">Marte</span>
+        <span class="check" aria-hidden="true">✓</span>
+      </div>
+      <div class="opt c" role="listitem">
+        <span class="shape cir"></span><span class="txt">Saturno</span>
+        <span class="check" aria-hidden="true">✓</span>
+      </div>
+      <div class="opt d" role="listitem">
+        <span class="shape sqr"></span><span class="txt">Mercúrio</span>
+        <span class="check" aria-hidden="true">✓</span>
+      </div>
+    </div>
+
+    <div class="timer" style="justify-content:center">
+      <div class="dial" id="dial">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="track" cx="50" cy="50" r="44" fill="none" stroke-width="9"></circle>
+          <circle class="bar" cx="50" cy="50" r="44" fill="none" stroke-width="9"></circle>
+        </svg>
+        <span class="num">25</span>
+      </div>
+      <p class="answered-count" aria-live="off"><b id="ans">0</b> de <b>9</b> já confirmaram</p>
+    </div>
+  </section>
+
+  <footer class="stage-bottom">
+    <div class="progress"><i style="width:68%"></i></div>
+    <div class="stage-actions">
+      <button class="btn btn-icon is-disabled" data-back title="Voltar (←)" aria-label="Voltar">←</button>
+      <button class="btn btn-primary btn-lg" data-primary data-href="stage-reveal-multi.html">
+        Revelar resposta <span class="kbd">Espaço</span>
+      </button>
+      <button class="btn btn-icon" data-fullscreen title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
+      <button class="btn btn-icon" data-sfx-toggle title="Som (M)" aria-label="Som">🔊</button>
+      <a class="btn btn-icon" href="stage-shortcuts.html" data-go title="Atalhos (?)" aria-label="Atalhos">⌨</a>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+LP.stageKeys({ shortcuts: 'stage-shortcuts.html' });
+LP.ring(document.getElementById('dial'), 25, () => LP.go('stage-reveal-multi.html'));
+const ans = document.getElementById('ans');
+let a = 0;
+const t = setInterval(() => { if (a >= 9) return clearInterval(t); ans.textContent = ++a; LP.SFX.pick(); }, 1500);
+</script>
+</body>
+</html>

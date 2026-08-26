@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Telão · Ranking — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="stage">
+  <header class="stage-top">
+    <span class="room-code">QDSKCH</span>
+    <span class="qr-mini" data-qr="QDSKCH"></span>
+    <div class="stage-meta">
+      <span class="chip hide-sm">📦 Bloco 1 · Aquecimento</span>
+      <span class="chip">Pergunta <b>4</b> de <b>8</b></span>
+      <span class="chip"><span class="dot"></span> <b>9</b>&nbsp;na sala</span>
+    </div>
+  </header>
+
+  <section class="scene center" aria-live="polite">
+    <span class="eyebrow" style="margin-bottom:clamp(10px,2vh,22px)">🏁 Ranking · top 5</span>
+    <div class="board">
+      <div class="lb-row top1">
+        <i class="fill" style="--w:100%"></i>
+        <span class="rank">1</span><span class="av">🦊</span>
+        <span class="name">Ana</span>
+        <span class="delta up">↑ 2</span>
+        <span class="score">3.763</span>
+      </div>
+      <div class="lb-row">
+        <i class="fill" style="--w:97%"></i>
+        <span class="rank">2</span><span class="av">🐙</span>
+        <span class="name">Chris</span>
+        <span class="delta down">↓ 1</span>
+        <span class="score">3.702</span>
+      </div>
+      <div class="lb-row">
+        <i class="fill" style="--w:95%"></i>
+        <span class="rank">3</span><span class="av">🦄</span>
+        <span class="name">Duda</span>
+        <span class="delta same">— 0</span>
+        <span class="score">3.688</span>
+      </div>
+      <div class="lb-row">
+        <i class="fill" style="--w:71%"></i>
+        <span class="rank">4</span><span class="av">🐨</span>
+        <span class="name">Iris</span>
+        <span class="delta up">↑ 3</span>
+        <span class="score">2.914</span>
+      </div>
+      <div class="lb-row">
+        <i class="fill" style="--w:64%"></i>
+        <span class="rank">5</span><span class="av">🐼</span>
+        <span class="name">Bruno</span>
+        <span class="delta down">↓ 2</span>
+        <span class="score">2.640</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="stage-bottom">
+    <div class="progress"><i style="width:50%"></i></div>
+    <div class="stage-actions">
+      <button class="btn btn-icon" data-back data-href="stage-reveal.html" title="Voltar (←)" aria-label="Voltar">←</button>
+      <button class="btn btn-primary btn-lg" data-primary data-href="stage-block-intro.html">
+        Abrir o bloco 2 <span class="kbd">Espaço</span>
+      </button>
+      <button class="btn btn-icon" data-fullscreen title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
+      <button class="btn btn-icon" data-sfx-toggle title="Som (M)" aria-label="Som">🔊</button>
+      <a class="btn btn-icon" href="stage-shortcuts.html" data-go title="Atalhos (?)" aria-label="Atalhos">⌨</a>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+LP.stageKeys({ shortcuts: 'stage-shortcuts.html' });
+LP.SFX.board();
+// as barras crescem depois da entrada das linhas
+requestAnimationFrame(() => {
+  document.querySelectorAll('.lb-row .fill').forEach((f, i) => {
+    const w = f.style.getPropertyValue('--w');
+    f.style.width = '0%';
+    setTimeout(() => { f.style.width = w; }, 260 + i * 110);
+  });
+});
+</script>
+</body>
+</html>

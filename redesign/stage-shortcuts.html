@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Telão · Atalhos — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="stage">
+  <header class="stage-top">
+    <span class="room-code">QDSKCH</span>
+    <span class="qr-mini" data-qr="QDSKCH"></span>
+    <div class="stage-meta">
+      <span class="chip">⌨️ Atalhos do apresentador</span>
+    </div>
+  </header>
+
+  <section class="scene center">
+    <span class="eyebrow" style="margin-bottom:clamp(12px,2.4vh,26px)">
+      Conduza sem tocar no mouse
+    </span>
+    <div class="shortcuts">
+      <div class="sc"><span class="kbd">Espaço</span> Próximo passo</div>
+      <div class="sc"><span class="kbd">→</span> Próximo passo</div>
+      <div class="sc"><span class="kbd">←</span> Voltar um passo</div>
+      <div class="sc"><span class="kbd">F</span> Tela cheia</div>
+      <div class="sc"><span class="kbd">L</span> Mostrar ranking</div>
+      <div class="sc"><span class="kbd">M</span> Mudo</div>
+      <div class="sc"><span class="kbd">G</span> Corrigir abertas <span style="color:var(--ink-dim);font-size:.85em">(só em resposta aberta)</span></div>
+      <div class="sc"><span class="kbd">Esc</span> Fechar esta tela</div>
+      <div class="sc"><span class="kbd">?</span> Esta tela</div>
+    </div>
+  </section>
+
+  <footer class="stage-bottom">
+        <div class="stage-actions">
+      <button class="btn btn-primary btn-lg" data-primary data-close id="back">
+        Voltar ao telão <span class="kbd">Espaço</span> <span class="kbd">Esc</span>
+      </button>
+      <button class="btn btn-icon" data-fullscreen title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
+      <button class="btn btn-icon" data-sfx-toggle title="Som (M)" aria-label="Som">🔊</button>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+LP.stageKeys({});
+// consultar os atalhos no meio da apresentacao nao pode custar o lugar na sessao
+const from = new URLSearchParams(location.search).get('from');
+document.getElementById('back').addEventListener('click', () => {
+  LP.go(from && /^[\w.-]+\.html$/.test(from) ? from : 'stage-lobby.html');
+});
+</script>
+</body>
+</html>

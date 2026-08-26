@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Múltipla seleção — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="phone">
+  <header class="play-top">
+    <span class="who"><span class="av">🦊</span> Ana</span>
+    <div class="metrics">
+      <span class="metric pts">⭐ 4.512</span>
+      <span class="metric streak">🔥 4</span>
+      <button class="btn btn-icon" data-sfx-toggle aria-label="Som">🔊</button>
+    </div>
+  </header>
+
+  <div class="play-body">
+    <div class="row spread" style="gap:10px">
+      <span class="eyebrow" id="prompt" role="status">Marque 2 · depois confirme</span>
+      <span class="metric" id="clock">⏱ <b id="secs">25</b>s</span>
+    </div>
+    <div class="timebar" id="tb" role="timer" aria-label="Tempo restante"><i></i></div>
+
+    <div class="opts-mobile" id="opts">
+      <button class="opt a" aria-pressed="false"><span class="shape tri"></span><span class="txt">Júpiter</span><span class="check" aria-hidden="true">✓</span></button>
+      <button class="opt b" aria-pressed="false"><span class="shape dia"></span><span class="txt">Marte</span><span class="check" aria-hidden="true">✓</span></button>
+      <button class="opt c" aria-pressed="false"><span class="shape cir"></span><span class="txt">Saturno</span><span class="check" aria-hidden="true">✓</span></button>
+      <button class="opt d" aria-pressed="false"><span class="shape sqr"></span><span class="txt">Mercúrio</span><span class="check" aria-hidden="true">✓</span></button>
+    </div>
+
+    <!-- múltipla seleção precisa de confirmação explícita: sem isso o primeiro
+         toque encerraria a resposta e o jogador nunca marcaria a segunda -->
+    <div class="confirm-bar">
+      <span class="count" id="count">0 de 2</span>
+      <button class="btn btn-primary is-disabled" id="send">Confirmar resposta</button>
+    </div>
+  </div>
+
+  <footer class="play-foot">
+    <div class="reactions" role="group" aria-label="Reações">
+      <button data-react="👏" aria-label="Palmas">👏</button>
+      <button data-react="🔥" aria-label="Fogo">🔥</button>
+      <button data-react="😂" aria-label="Risada">😂</button>
+      <button data-react="😮" aria-label="Surpresa">😮</button>
+      <button data-react="❤️" aria-label="Coração">❤️</button>
+      <button data-react="🎉" aria-label="Festa">🎉</button>
+      <button data-react="🤯" aria-label="Mente explodindo">🤯</button>
+      <button data-react="👍" aria-label="Positivo">👍</button>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+const secs = document.getElementById('secs');
+const send = document.getElementById('send');
+const count = document.getElementById('count');
+let left = 25;
+// marcado sem confirmar tem que valer: perder por nao apertar um botao que
+// ninguem disse ser obrigatorio e a pior forma de perder num quiz
+const bar = LP.timebar(document.getElementById('tb'), 25, () => {
+  if (picked().length && !document.body.dataset.locked) { send.click(); return; }
+  LP.go('play-reveal-partial.html');
+});
+const tick = setInterval(() => {
+  secs.textContent = Math.max(0, --left);
+  if (left === 5 && picked().length && !document.body.dataset.locked) {
+    LP.toast('Confirme para valer!'); LP.buzz([20, 40, 20]);
+  }
+}, 1000);
+LP.buzz([12, 40, 12]);
+
+let warned = false;
+function picked() { return [...document.querySelectorAll('.opt[aria-pressed="true"]')]; }
+
+document.getElementById('opts').addEventListener('click', e => {
+  const b = e.target.closest('.opt');
+  if (!b || document.body.dataset.locked) return;
+  const on = b.getAttribute('aria-pressed') !== 'true';
+  b.setAttribute('aria-pressed', String(on));
+  LP.SFX.pick(); LP.buzz(on ? 14 : 8);
+  const n = picked().length;
+  // enquanto houver marcação sem confirmação, o aviso fica em evidência
+  count.innerHTML = n ? '<b style="color:var(--warn)">⚠️ ' + n + ' marcada' +
+    (n > 1 ? 's' : '') + ' — confirme!</b>' : '0 de 2';
+  send.classList.toggle('is-disabled', n === 0);
+  if (n === 1 && !warned) { warned = true; LP.buzz(30); }
+});
+
+send.addEventListener('click', () => {
+  if (document.body.dataset.locked) return;
+  document.body.dataset.locked = '1';
+  bar.stop(); clearInterval(tick);
+  LP.SFX.pick(); LP.buzz([18, 30, 40]);
+  document.querySelectorAll('.opt').forEach(o => {
+    if (o.getAttribute('aria-pressed') !== 'true') {
+      o.classList.add('faded'); o.setAttribute('aria-disabled', 'true'); o.tabIndex = -1;
+    }
+  });
+  LP.say('Resposta enviada com ' + picked().length + ' alternativas marcadas.');
+  document.getElementById('prompt').innerHTML =
+    '✅ <b>' + picked().length + '</b> marcadas · enviado';
+  document.getElementById('clock').outerHTML =
+    '<span class="waiting"><span class="orb"></span><span class="orb"></span>' +
+    '<span class="orb"></span><span>5 de 9</span></span>';
+  send.outerHTML = '<span class="badge" style="flex:1;justify-content:center">' +
+    '⏳ Aguardando os outros</span>';
+  setTimeout(() => LP.go('play-reveal-partial.html'), 1800);
+});
+</script>
+</body>
+</html>

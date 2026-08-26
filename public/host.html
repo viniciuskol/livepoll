@@ -1,0 +1,146 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title data-i18n="host.create_title">LivePoll - Host</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="/css/app.css" />
+<link rel="stylesheet" href="/css/stage.css" />
+
+<!-- Atmosphere: aurora + grain + vignette, behind everything (z-index -1). -->
+<div class="atmos" aria-hidden="true">
+  <span class="aurora a"></span><span class="aurora b"></span><span class="aurora c"></span>
+  <span class="grain"></span>
+</div>
+
+<header class="topbar" id="setup-topbar">
+  <a class="brand" href="/"><span class="dot" aria-hidden="true"></span><span data-i18n="app.name">LivePoll</span></a>
+  <span class="spacer"></span>
+  <div data-lang-switch></div>
+  <button id="mute" class="btn btn-icon" type="button" aria-pressed="false">🔊</button>
+</header>
+
+<main class="wizard" id="create-view">
+  <!-- The rail is a map of the setup, not a claim: page-host.js moves `.now`
+       and `.done` as the spreadsheet validates. -->
+  <div class="steps" id="setup-steps" role="group" data-i18n-aria-label="host.steps_label">
+    <span class="step now" data-step="1"><span class="b" aria-hidden="true">1</span><span data-i18n="host.rail_template"></span></span>
+    <span class="step-line" aria-hidden="true"></span>
+    <span class="step" data-step="2"><span class="b" aria-hidden="true">2</span><span data-i18n="host.rail_questions"></span></span>
+    <span class="step-line" aria-hidden="true"></span>
+    <span class="step" data-step="3"><span class="b" aria-hidden="true">3</span><span data-i18n="host.rail_settings"></span></span>
+    <span class="step-line" aria-hidden="true"></span>
+    <span class="step" data-step="4"><span class="b" aria-hidden="true">4</span><span data-i18n="host.rail_room"></span></span>
+  </div>
+
+  <h1 data-i18n="host.create_title">Create a room</h1>
+
+  <section class="card">
+    <h2 data-i18n="host.step_template">1. Get the template</h2>
+    <p class="hint" data-i18n="host.template_desc"></p>
+    <div class="row">
+      <button id="dl-csv" class="btn btn-secondary" type="button" data-i18n="host.download_csv"></button>
+      <button id="dl-xlsx" class="btn btn-secondary" type="button" data-i18n="host.download_xlsx"></button>
+      <span class="tag" data-i18n="host.columns"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="host.step_upload">2. Upload your questions</h2>
+    <p class="hint" data-i18n="host.file_hint"></p>
+    <label class="drop">
+      <span class="ico" aria-hidden="true">📥</span>
+      <span class="drop-title" data-i18n="host.file_label"></span>
+      <span class="drop-hint" data-i18n="host.file_formats"></span>
+      <input id="file" type="file" accept=".csv,.tsv,.txt,.xlsx" data-i18n-aria-label="host.file_label" />
+    </label>
+    <div id="validation" aria-live="polite"></div>
+    <div id="preview"></div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="host.step_settings">3. Room settings</h2>
+    <form id="create-form" novalidate>
+      <div class="field">
+        <label for="title" data-i18n="host.title_label"></label>
+        <input id="title" class="input" type="text" maxlength="120" data-i18n-placeholder="host.title_placeholder" data-i18n-aria-label="host.title_label" />
+      </div>
+      <div class="field">
+        <label for="password" data-i18n="host.password_label"></label>
+        <input id="password" class="input" type="password" minlength="4" maxlength="64" autocomplete="new-password" data-i18n-aria-label="host.password_label" />
+        <p class="hint" data-i18n="host.password_hint"></p>
+      </div>
+      <div class="field">
+        <label class="row" for="show-prompt" style="text-transform:none;letter-spacing:normal;font-size:15px;color:var(--ink)">
+          <input id="show-prompt" type="checkbox" />
+          <span data-i18n="host.show_prompt_label"></span>
+        </label>
+        <p class="hint" data-i18n="host.show_prompt_hint"></p>
+      </div>
+      <button id="create-btn" class="btn btn-lg btn-block" type="submit" data-i18n="host.create_btn"></button>
+    </form>
+  </section>
+
+  <section class="card" id="reopen">
+    <h2 data-i18n="host.reopen_title"></h2>
+    <form id="reopen-form" novalidate>
+      <div class="field">
+        <label for="r-code" data-i18n="index.code_label"></label>
+        <input id="r-code" class="input code code-input" type="text" maxlength="7" autocomplete="off" autocapitalize="characters" data-i18n-aria-label="index.code_label" />
+      </div>
+      <div class="field">
+        <label for="r-password" data-i18n="host.password_label"></label>
+        <input id="r-password" class="input" type="password" autocomplete="current-password" data-i18n-aria-label="host.password_label" />
+      </div>
+      <button class="btn btn-secondary btn-block" type="submit" data-i18n="host.reopen_btn"></button>
+    </form>
+  </section>
+</main>
+
+<!-- The stage. No app topbar, no language switcher, no empty card: every state
+     fills the projector (SPEC-UX). Labels are set from the dictionary in JS. -->
+<div id="stage" class="stage hidden">
+  <header class="stage-strip">
+    <div class="strip-code" id="s-codewrap">
+      <span class="strip-label" data-i18n="panel.room_code"></span>
+      <b id="s-code">------</b>
+    </div>
+    <canvas id="s-qr" class="strip-qr" data-i18n-aria-label="panel.qr_label"></canvas>
+    <span class="strip-sep"></span>
+    <div class="strip-meta">
+      <span class="strip-block" id="s-block"></span>
+      <span id="s-qof"></span>
+      <span id="s-players"></span>
+    </div>
+    <!-- Announced to screen readers on every transition (SPEC-UX a11y). -->
+    <span id="s-state" class="sr-only" aria-live="polite"></span>
+  </header>
+
+  <main class="stage-center" id="s-center" aria-live="polite"></main>
+
+  <footer class="stage-foot">
+    <div class="progress"><i id="s-progress"></i></div>
+    <div class="foot-row">
+      <button id="s-primary" class="btn btn-primary-stage" type="button"></button>
+      <div class="foot-secondary">
+        <button id="s-back" class="stage-icon" type="button">←</button>
+        <button id="s-lb" class="stage-icon" type="button" aria-pressed="false">☰</button>
+        <button id="s-grade" class="stage-icon" type="button">✎</button>
+        <button id="s-full" class="stage-icon" type="button">⛶</button>
+        <button id="s-mute" class="stage-icon" type="button" aria-pressed="false">🔊</button>
+        <button id="s-help" class="stage-icon" type="button">?</button>
+        <button id="s-end" class="stage-icon" type="button">◼</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Inside the stage on purpose: `position: fixed` makes .stage its own
+       stacking context, so a canvas outside it always paints on top - which is
+       how the finale confetti ended up raining over the room code (P2-5).
+       In here the strip and the footer (z-index 66) stay above it. -->
+  <div id="confetti" aria-hidden="true"></div>
+  <div id="fx-layer" aria-hidden="true"></div>
+</div>
+
+<div id="overlay-root"></div>
+<script type="module" src="/js/page-host.js"></script>

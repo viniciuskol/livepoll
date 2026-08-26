@@ -1,0 +1,540 @@
+// Player page: the phone as a game controller (SPEC-UX). The prompt lives on
+// the stage; this screen gives the command, the feedback and the bragging.
+import { initI18n, t, onLangChange } from './i18n.js';
+import { $, el, show, toast, optionButton, optionLabel, SHAPES, ringSvg, paintRing } from './ui.js';
+import { mountMuteButton, sfx, vibrate, confetti, floatEmoji, reducedMotion } from './fx.js';
+import { rooms, errorMessage } from './api.js';
+import { createPoller } from './poll.js';
+
+const EMOJIS = ['👏', '🔥', '😂', '😮', '❤️', '🎉', '🤯', '👍'];
+const STORAGE = 'livepoll.player';
+
+await initI18n();
+mountMuteButton($('#mute'), () => t('common.mute_toggle'));
+
+const ctx = {
+  code: '',
+  playerToken: '',
+  nickname: '',
+  avatar: '',
+  state: null,
+  serverOffset: 0,
+  selection: new Set(),
+  roundKey: null,
+  submitted: false,
+  timeUp: false,
+  questionId: null,
+  seenReactions: Date.now(),
+  sceneKey: null,
+  shownReveal: null,
+  poller: null,
+};
+
+const params = new URLSearchParams(location.search);
+$('#code').value = (params.get('code') || '').toUpperCase();
+$('#nickname').value = params.get('nickname') || '';
+$('#code').addEventListener('input', (e) => {
+  e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+});
+
+// Resume a previous session in the same room.
+try {
+  const saved = JSON.parse(localStorage.getItem(STORAGE) || 'null');
+  if (saved && saved.code && (!$('#code').value || saved.code === $('#code').value)) {
+    $('#code').value = saved.code;
+    $('#nickname').value = saved.nickname || '';
+    enterRoom(saved.code, saved.playerToken, saved.nickname, saved.avatar);
+  }
+} catch { /* ignore */ }
+
+$('#join-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = $('#code').value.trim().toUpperCase();
+  const nickname = $('#nickname').value.trim();
+  const btn = $('#join-btn');
+  btn.disabled = true;
+  btn.textContent = t('play.joining');
+  try {
+    // A finished session is checked before we try to join: POSTing into it
+    // answers 409, which the browser also logs as a console error, and the
+    // generic "not possible right now" toast said nothing useful (P2-9).
+    const room = await rooms.state(code);
+    if (room && room.state === 'ended') {
+      toast(t('play.session_over'), 'error');
+      return;
+    }
+    const res = await rooms.join(code, nickname);
+    localStorage.setItem(STORAGE, JSON.stringify({
+      code, playerToken: res.playerToken, nickname: res.nickname, avatar: res.avatar,
+    }));
+    sfx.join();
+    vibrate(30);
+    enterRoom(code, res.playerToken, res.nickname, res.avatar);
+  } catch (err) {
+    toast(err && err.code === 'ROOM_ENDED' ? t('play.session_over') : errorMessage(err), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('play.join_btn');
+  }
+});
+
+function enterRoom(code, playerToken, nickname, avatar) {
+  ctx.code = code;
+  ctx.playerToken = playerToken;
+  ctx.nickname = nickname;
+  ctx.avatar = avatar || '';
+  show($('#join-view'), false);
+  show($('#join-topbar'), false);
+  show($('#game-view'), true);
+  document.body.classList.add('ctrl-on');
+  paintIdentity({ nickname, avatar: ctx.avatar });
+  mountReactions();
+  const paintMute = mountMuteButton($('#p-mute'), () => t('common.mute_toggle'));
+  ctx.poller = createPoller(
+    () => rooms.state(code, ctx.state ? ctx.state.version : null, playerToken),
+    render,
+    (e) => { const m = errorMessage(e); if (m) toast(m, 'error'); }
+  );
+  ctx.poller.start();
+  onLangChange(() => { paintMute(); if (ctx.state) render(ctx.state, true); });
+  requestAnimationFrame(tickTimer);
+}
+
+function mountReactions() {
+  const wrap = $('#reactions');
+  wrap.innerHTML = '';
+  wrap.setAttribute('role', 'group');
+  wrap.setAttribute('aria-label', t('play.reactions'));
+  EMOJIS.forEach((emoji) => {
+    wrap.appendChild(el('button', {
+      type: 'button',
+      text: emoji,
+      'aria-label': emoji,
+      onclick: async () => {
+        floatEmoji(emoji, 2);
+        sfx.click();
+        try { await rooms.reaction(ctx.code, ctx.playerToken, emoji); } catch { /* non critical */ }
+      },
+    }));
+  });
+}
+
+/** Floats only the reaction bubbles we have not shown yet. */
+function floatNewReactions(reactions) {
+  const list = reactions || [];
+  list.forEach((r) => { if (r.at > ctx.seenReactions) floatEmoji(r.emoji, 1); });
+  if (list.length) ctx.seenReactions = Math.max(ctx.seenReactions, ...list.map((r) => r.at));
+}
+
+function paintIdentity(me) {
+  const nickname = (me && me.nickname) || ctx.nickname;
+  $('#p-avatar').textContent = (me && me.avatar) || ctx.avatar || '🙂';
+  $('#p-nick').textContent = nickname;
+  $('.ctrl-me').setAttribute('aria-label', t('play.you_are', { nickname }));
+  $('#p-score').textContent = String((me && me.score) || 0);
+  $('#p-rank').textContent = t('play.rank', { rank: (me && me.rank) || '-' });
+}
+
+/**
+ * Lightweight `unchanged` poll response: nothing about the room moved, so only
+ * the identity bar and the reaction bubbles are refreshed. Rank is not part of
+ * this payload (it cannot change without a version bump), so the value already
+ * on screen is kept.
+ */
+function applyUnchanged(state) {
+  ctx.serverOffset = state.serverNow - Date.now();
+  if (ctx.state) {
+    if (state.me) ctx.state.me = { ...(ctx.state.me || {}), ...state.me };
+    ctx.state.serverNow = state.serverNow;
+  }
+  const me = (ctx.state && ctx.state.me) || state.me || {};
+  paintIdentity({ ...me, rank: me.rank });
+  floatNewReactions(state.reactions);
+}
+
+function render(state, force = false) {
+  if (!state) return;
+  if (state.unchanged) { applyUnchanged(state); return; }
+  const prev = ctx.state;
+  ctx.state = state;
+  ctx.serverOffset = state.serverNow - Date.now();
+  const me = state.me || {};
+  if (me.avatar) ctx.avatar = me.avatar;
+  paintIdentity(me);
+  floatNewReactions(state.reactions);
+
+  const q = state.question;
+  // A *round* is a question plus the clock it was opened with, not just the
+  // question: when the presenter walks back out of `answering` the server
+  // throws the answers away and stamps a new `startedAt`, so the same question
+  // comes back as a new round. Keying the reset on the question id alone left
+  // `submitted`/`timeUp` set, and the phone showed "answer locked in" for a
+  // round it had no answer in - the options never came back and the player
+  // could only score again by reloading the page.
+  const roundKey = q ? `${q.id}:${state.startedAt || 0}` : null;
+  if (roundKey !== ctx.roundKey) {
+    ctx.roundKey = roundKey;
+    ctx.questionId = q ? q.id : null;
+    ctx.selection = new Set();
+    ctx.submitted = false;
+    ctx.timeUp = false;
+  }
+  if (me.answered) ctx.submitted = true;
+
+  $('#game-view').setAttribute('data-state', state.state);
+  // The accessibility prompt is part of the scene identity: toggled mid-question
+  // it used to leave the old scene on screen, so turning the setting *off* left
+  // the prompt sitting on every phone.
+  const prompt = state.settings && state.settings.showPromptOnPhone ? 'p' : '';
+  const key = [state.state, q ? q.id : 0, ctx.submitted ? 'sent' : '', ctx.timeUp ? 'up' : '', prompt].join('|');
+  if (key !== ctx.sceneKey || force) {
+    ctx.sceneKey = key;
+    const center = $('#p-center');
+    center.innerHTML = '';
+    center.classList.toggle('top', state.state === 'answering' || state.state === 'leaderboard');
+    center.appendChild(buildScene(state));
+  } else {
+    patchScene(state);
+  }
+
+  if (state.state === 'reveal' && ctx.shownReveal !== (q && q.id)) {
+    ctx.shownReveal = q ? q.id : null;
+    revealFeedback(state);
+  }
+  if (state.state !== 'reveal' && ctx.shownReveal && state.state !== 'leaderboard') ctx.shownReveal = null;
+
+  if (state.state === 'ended' && (!prev || prev.state !== 'ended')) {
+    const top3 = (me.rank || 99) <= 3;
+    if (top3) confetti(2400);
+    sfx.podium();
+  }
+  // Nothing else will ever change: stop hammering the server.
+  if (state.state === 'ended' && ctx.poller) ctx.poller.stop();
+}
+
+/* ------------------------------------------------------------------ scenes */
+
+function buildScene(state) {
+  switch (state.state) {
+    case 'reading': return sceneReading(state);
+    case 'answering': return ctx.submitted || ctx.timeUp ? sceneWaiting(state) : sceneAnswering(state);
+    case 'reveal': return sceneReveal(state);
+    case 'leaderboard': return sceneLeaderboard(state);
+    case 'block_intro': return sceneBlockIntro(state);
+    case 'ended': return sceneEnded(state);
+    default: return sceneLobby(state);
+  }
+}
+
+function patchScene(state) {
+  const count = $('#p-count');
+  if (count) count.textContent = t('play.waiting_others', { count: state.answerCount, total: state.playerCount });
+}
+
+function sceneLobby(state) {
+  return el('div', { class: 'watch' }, [
+    el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: ctx.avatar || '🙂' }),
+    el('h1', { class: 'ctrl-title', text: t('play.waiting_title') }),
+    el('p', { class: 'ctrl-note', text: t('play.waiting_desc') }),
+  ]);
+}
+
+function sceneReading(state) {
+  const showPrompt = state.settings && state.settings.showPromptOnPhone && state.question && state.question.prompt;
+  return el('div', { class: 'watch' }, [
+    el('div', { class: 'eyes', 'aria-hidden': 'true', text: '👀' }),
+    el('h1', { class: 'ctrl-title', text: t('play.look_at_stage') }),
+    // No prompt and no options here: that is what stops the room from looking
+    // the answer up while the presenter is still reading.
+    showPrompt ? el('p', { class: 'ctrl-prompt', text: state.question.prompt }) : null,
+    el('p', { class: 'ctrl-note', text: t('play.look_hint') }),
+  ]);
+}
+
+function sceneBlockIntro(state) {
+  return el('div', { class: 'watch' }, [
+    el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '🚩' }),
+    el('h1', { class: 'ctrl-title', text: t('play.new_block') }),
+    el('p', { class: 'ctrl-note', text: state.blockName || t('play.get_ready') }),
+  ]);
+}
+
+function sceneAnswering(state) {
+  const q = state.question || {};
+  const showPrompt = state.settings && state.settings.showPromptOnPhone && q.prompt;
+  // `ctrl-scene`, not `summary`: a flex column whose option grid absorbs the
+  // slack of the whole centre region. Four 72px buttons used to leave 290px of
+  // unused screen right where the player's thumbs are.
+  const scene = el('div', { class: 'ctrl-scene' });
+  scene.appendChild(el('div', { class: 'ctrl-ring' }, [
+    ringSvg('p-ring'),
+    el('span', { class: 'count', id: 'p-count', text: t('play.waiting_others', { count: state.answerCount, total: state.playerCount }) }),
+  ]));
+  if (showPrompt) scene.appendChild(el('p', { class: 'ctrl-prompt', text: q.prompt }));
+
+  if (q.type === 'open_text') {
+    const input = el('input', {
+      id: 'open-text', type: 'text', maxlength: '200',
+      placeholder: t('play.open_placeholder'), 'aria-label': t('play.open_placeholder'),
+    });
+    scene.append(
+      el('p', { class: 'ctrl-note', text: t('play.answer_hint_open') }),
+      input,
+      el('button', { class: 'btn btn-block', id: 'submit-btn', type: 'button', text: t('play.submit'), onclick: () => submitAnswer() })
+    );
+    return scene;
+  }
+
+  const multi = q.type === 'multiple_select';
+  const grid = el('div', { class: 'ctrl-opts', id: 'options' });
+  (q.options || []).forEach((option, i) => {
+    const btn = optionButton(q, option, i, () => {
+      if (ctx.submitted || ctx.timeUp) return;
+      sfx.click();
+      vibrate(12);
+      if (multi) {
+        if (ctx.selection.has(option.position)) ctx.selection.delete(option.position);
+        else ctx.selection.add(option.position);
+        paintSelection();
+      } else {
+        ctx.selection = new Set([option.position]);
+        paintSelection();
+        submitAnswer();
+      }
+    });
+    grid.appendChild(btn);
+  });
+  scene.append(
+    el('p', { class: 'ctrl-note', text: multi ? t('play.select_hint_multi') : t('play.select_hint_single') }),
+    grid
+  );
+  if (multi) scene.appendChild(el('button', { class: 'btn btn-block', id: 'submit-btn', type: 'button', text: t('play.submit'), onclick: () => submitAnswer() }));
+  // The options landing in the hand get a short buzz.
+  vibrate(18);
+  paintSelection(grid);
+  return scene;
+}
+
+function paintSelection(root) {
+  const grid = root || $('#options');
+  if (!grid) return;
+  [...grid.children].forEach((btn) => {
+    const position = Number(btn.getAttribute('data-position'));
+    btn.setAttribute('aria-pressed', String(ctx.selection.has(position)));
+  });
+}
+
+/** After answering: the chosen shape plus a live counter, never a dead screen. */
+function sceneWaiting(state) {
+  const q = state.question || {};
+  const chosen = [...(ctx.selection.size ? ctx.selection : new Set(((state.me || {}).answered || {}).choice || []))];
+  const index = (q.options || []).findIndex((o) => o.position === chosen[0]);
+  const answered = (state.me || {}).answered || {};
+  const body = [];
+  if (ctx.timeUp && !ctx.submitted) {
+    body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '⏱️' }));
+    body.push(el('h1', { class: 'ctrl-title', text: t('play.time_up') }));
+  } else {
+    if (index >= 0) {
+      body.push(el('div', { class: `sent-wrap opt opt-${index + 1}` },
+        el('span', { class: `sent-shape ${SHAPES[index % SHAPES.length]}`, 'aria-hidden': 'true' })));
+      body.push(el('p', { class: 'ctrl-prompt', text: optionLabel(q, (q.options || [])[index]) }));
+    } else if (answered.text) {
+      body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '✍️' }));
+      body.push(el('p', { class: 'ctrl-prompt', text: answered.text }));
+    }
+    body.push(el('h1', { class: 'ctrl-title', text: t('play.locked_in') }));
+  }
+  body.push(el('p', { class: 'ctrl-note', id: 'p-count', text: t('play.waiting_others', { count: state.answerCount, total: state.playerCount }) }));
+  return el('div', { class: 'sent-card' }, body);
+}
+
+function sceneReveal(state) {
+  const me = state.me || {};
+  const answered = me.answered;
+  const body = [];
+  if (!answered) {
+    body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '⏱️' }));
+    body.push(el('h1', { class: 'ctrl-title', text: t('play.time_up') }));
+  } else if (answered.graded === false) {
+    body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '✍️' }));
+    body.push(el('h1', { class: 'ctrl-title', text: t('play.pending_grade') }));
+  } else if (answered.correct) {
+    body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '✅' }));
+    body.push(el('h1', { class: 'ctrl-title', text: t('play.correct') }));
+    body.push(el('div', { class: 'points', id: 'p-points', text: '0' }));
+  } else {
+    body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '❌' }));
+    body.push(el('h1', { class: 'ctrl-title', text: t('play.wrong') }));
+  }
+  const badges = el('div', { class: 'badges' });
+  // A correct answer always says something about the run it just started: the
+  // streak badge only appeared from 2 onwards, so the first correct answer of
+  // the game - the most triumphant moment a player has - was labelled
+  // "Position held".
+  if (me.streak > 1) {
+    badges.appendChild(el('span', { class: 'badge fire', text: `🔥 ${t('play.streak_fire', { streak: me.streak })}` }));
+  } else if (me.streak === 1 && answered && answered.correct) {
+    const firstEver = (me.bestStreak || 0) <= 1;
+    badges.appendChild(el('span', {
+      class: 'badge spark',
+      text: firstEver ? `🎯 ${t('play.first_blood')}` : `✨ ${t('play.streak_started')}`,
+    }));
+  }
+  // "Position held" is worth saying when nothing else happened; next to a fresh
+  // streak it is just noise stealing the moment.
+  if (Number(me.rankDelta) || badges.childElementCount === 0) badges.appendChild(deltaBadge(me.rankDelta));
+  badges.appendChild(el('span', { class: 'badge', text: t('play.rank', { rank: me.rank || '-' }) }));
+  body.push(badges);
+  return el('div', { class: 'sent-card' }, body);
+}
+
+function deltaBadge(delta) {
+  const n = Number(delta) || 0;
+  if (!n) return el('span', { class: 'badge', text: t('play.delta_hold') });
+  const up = n > 0;
+  return el('span', {
+    class: `badge ${up ? 'up' : 'down'}`,
+    text: `${up ? '↑' : '↓'} ${t(up ? 'play.delta_up' : 'play.delta_down', { count: Math.abs(n) })}`,
+  });
+}
+
+/** Flash, haptics, sound and the points counting up. */
+function revealFeedback(state) {
+  const me = state.me || {};
+  const answered = me.answered;
+  if (!answered || answered.graded === false) return;
+  if (answered.correct) {
+    flash('ok');
+    sfx.correct();
+    vibrate([18, 40, 26]);
+    countUp($('#p-points'), Number(answered.points) || 0);
+  } else {
+    flash('bad');
+    sfx.wrong();
+    vibrate(140);
+  }
+}
+
+function flash(kind) {
+  const node = $('#flash');
+  if (!node || reducedMotion()) return;
+  node.className = `flash ${kind}`;
+  show(node, true);
+  void node.offsetWidth;
+  node.classList.add('run');
+  setTimeout(() => { show(node, false); node.classList.remove('run'); }, 800);
+}
+
+/** Points ticking up from zero - the little dopamine hit of the reveal. */
+function countUp(node, target) {
+  if (!node) return;
+  const label = (value) => t('play.points_earned', { points: value });
+  if (reducedMotion() || target <= 0) { node.textContent = label(target); return; }
+  const started = performance.now();
+  const duration = 700;
+  const step = (now) => {
+    const p = Math.min(1, (now - started) / duration);
+    node.textContent = label(Math.round(target * (1 - (1 - p) ** 3)));
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function sceneLeaderboard(state) {
+  const rows = state.leaderboard || [];
+  const meId = (state.me || {}).id;
+  const list = el('ol', { class: 'ctrl-lb' });
+  if (!rows.length) list.appendChild(el('li', { text: t('lb.empty') }));
+  rows.slice(0, 10).forEach((p) => {
+    list.appendChild(el('li', { class: p.id === meId ? 'me' : '' }, [
+      el('span', { class: 'lb-rank', text: String(p.rank) }),
+      el('span', { 'aria-hidden': 'true', text: p.avatar || '🙂' }),
+      el('span', { class: 'name', text: p.id === meId ? `${p.nickname} (${t('lb.you')})` : p.nickname }),
+      el('span', { class: 'lb-score', text: String(p.score) }),
+    ]));
+  });
+  const scene = el('div', { class: 'summary' }, [
+    el('h1', { class: 'ctrl-title', text: t('lb.title') }),
+    list,
+  ]);
+  // Keep the player's own row on screen even in a crowded room.
+  requestAnimationFrame(() => {
+    const mine = scene.querySelector('li.me');
+    if (mine) mine.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
+  });
+  return scene;
+}
+
+/**
+ * Personal end-of-game card. This used to never render: `render` caught
+ * `ended` in the "no question" branch and hid #feedback before the ended
+ * branch could run (P2-2). It is now a scene of its own.
+ */
+function sceneEnded(state) {
+  const me = state.me || {};
+  const summary = me.summary || { correct: 0, answered: 0, bestStreak: me.bestStreak || 0, score: me.score || 0 };
+  const row = (labelKey, value) => el('div', { class: 'summary-row' }, [
+    el('span', { text: t(labelKey) }),
+    el('b', { text: String(value) }),
+  ]);
+  return el('div', { class: 'summary' }, [
+    el('h1', { class: 'ctrl-title', text: t('play.ended_title') }),
+    el('p', { class: 'ctrl-note', text: t('play.summary_title') }),
+    el('div', { class: 'points', text: String(summary.score) }),
+    row('play.summary_correct', `${summary.correct}/${state.totalQuestions || summary.answered}`),
+    row('play.summary_streak', summary.bestStreak),
+    row('play.summary_rank', me.rank || '-'),
+    el('p', { class: 'ctrl-note', text: t('play.ended_desc') }),
+  ]);
+}
+
+/* ------------------------------------------------------------------ actions */
+
+async function submitAnswer() {
+  const state = ctx.state;
+  if (!state || !state.question || ctx.submitted || ctx.timeUp) return;
+  const q = state.question;
+  const payload = { playerToken: ctx.playerToken, questionId: q.id };
+  if (q.type === 'open_text') {
+    const input = $('#open-text');
+    const text = input ? input.value.trim() : '';
+    if (!text) { toast(t('err.answer_required'), 'error'); return; }
+    payload.text = text;
+  } else {
+    if (!ctx.selection.size) { toast(t('err.answer_required'), 'error'); return; }
+    payload.choice = [...ctx.selection];
+  }
+  ctx.submitted = true;
+  try {
+    await rooms.answer(ctx.code, payload);
+    vibrate(24);
+    sfx.click();
+    render(state, true);
+    ctx.poller.poke();
+  } catch (err) {
+    ctx.submitted = false;
+    toast(errorMessage(err), 'error');
+  }
+}
+
+/**
+ * Locks the answer UI the instant the timer reaches zero, so a late tap can no
+ * longer produce a confusing TIME_UP toast (the server only tolerates a few
+ * hundred ms of clock skew).
+ */
+function tickTimer() {
+  const state = ctx.state;
+  if (state && state.state === 'answering' && state.question && state.startedAt) {
+    const total = state.question.timeLimit * 1000;
+    const remaining = Math.max(0, total - (Date.now() + ctx.serverOffset - state.startedAt));
+    const ring = $('#p-ring');
+    paintRing(ring, remaining, total);
+    if (ring) ring.setAttribute('aria-label', t('panel.time_left', { seconds: Math.ceil(remaining / 1000) }));
+    if (remaining <= 0 && !ctx.timeUp) {
+      ctx.timeUp = true;
+      render(state, true);
+    }
+  }
+  requestAnimationFrame(tickTimer);
+}

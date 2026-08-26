@@ -1,0 +1,75 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title data-i18n="play.join_title">LivePoll - Play</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="/css/app.css" />
+<link rel="stylesheet" href="/css/controller.css" />
+
+<!-- Atmosphere: aurora + grain + vignette, behind everything (z-index -1). -->
+<div class="atmos" aria-hidden="true">
+  <span class="aurora a"></span><span class="aurora b"></span><span class="aurora c"></span>
+  <span class="grain"></span>
+</div>
+
+<header class="topbar" id="join-topbar">
+  <a class="brand" href="/"><span class="dot" aria-hidden="true"></span><span data-i18n="app.name">LivePoll</span></a>
+  <span class="spacer"></span>
+  <div data-lang-switch></div>
+  <button id="mute" class="btn btn-icon" type="button" aria-pressed="false">🔊</button>
+</header>
+
+<main class="wrap wrap-narrow" id="join-view">
+  <div class="join-hero">
+    <div class="ico" aria-hidden="true">🎮</div>
+    <h1 data-i18n="play.join_title">Join the game</h1>
+    <p data-i18n="play.join_lead"></p>
+  </div>
+  <section class="card">
+    <form id="join-form" novalidate>
+      <div class="field">
+        <label for="code" data-i18n="index.code_label"></label>
+        <input id="code" class="input code code-input" type="text" maxlength="7" autocomplete="off" autocapitalize="characters"
+               data-i18n-placeholder="index.code_placeholder" data-i18n-aria-label="index.code_label" required />
+      </div>
+      <div class="field">
+        <label for="nickname" data-i18n="index.nickname_label"></label>
+        <input id="nickname" class="input" type="text" maxlength="20" autocomplete="nickname"
+               data-i18n-placeholder="index.nickname_placeholder" data-i18n-aria-label="index.nickname_label" required />
+      </div>
+      <button id="join-btn" class="btn btn-lg btn-block" type="submit" data-i18n="play.join_btn"></button>
+    </form>
+  </section>
+  <p class="join-note" data-i18n="play.join_privacy"></p>
+</main>
+
+<!-- The game controller: one compact identity bar (the topbar and its growing
+     pills are gone), one scene that fills the rest, reactions always at thumb
+     height. Nothing scrolls while answering. -->
+<div id="game-view" class="ctrl hidden">
+  <header class="ctrl-bar">
+    <span class="ctrl-me">
+      <span class="ctrl-avatar" id="p-avatar" aria-hidden="true"></span>
+      <b id="p-nick"></b>
+    </span>
+    <span class="spacer"></span>
+    <span class="ctrl-stat" id="p-score">0</span>
+    <span class="ctrl-stat" id="p-rank"></span>
+    <button id="p-mute" class="ctrl-icon" type="button" aria-pressed="false">🔊</button>
+  </header>
+
+  <main class="ctrl-center" id="p-center" aria-live="polite"></main>
+
+  <footer class="ctrl-foot">
+    <div class="reactions" id="reactions"></div>
+  </footer>
+
+  <!-- Inside the shell: .ctrl is a fixed-position stacking context, so an
+       outside canvas would always paint over the identity bar. -->
+  <div id="confetti" aria-hidden="true"></div>
+  <div id="fx-layer" aria-hidden="true"></div>
+</div>
+
+<div id="flash" class="flash hidden" aria-hidden="true"></div>
+<script type="module" src="/js/page-play.js"></script>

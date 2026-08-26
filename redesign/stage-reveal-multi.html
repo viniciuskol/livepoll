@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Telão · Reveal múltipla — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="stage">
+  <header class="stage-top">
+    <span class="room-code">QDSKCH</span>
+    <span class="qr-mini" data-qr="QDSKCH"></span>
+    <div class="stage-meta">
+      <span class="chip hide-sm">📦 Bloco 2 · Aprofundando</span>
+      <span class="chip">Pergunta <b>6</b> de <b>8</b></span>
+      <span class="chip"><span class="dot"></span> <b>9</b>&nbsp;na sala</span>
+    </div>
+  </header>
+
+  <section class="scene vcenter reveal" data-fit-box aria-live="polite">
+    <div class="q-head">
+      <h1 class="question">Quais destes são gigantes gasosos?</h1>
+    </div>
+
+    <!-- duas corretas: ambas ganham o anel verde. As erradas dessaturam. -->
+    <div class="options" role="list">
+      <div class="opt a correct" role="listitem">
+        <span class="shape tri"></span><span class="txt">Júpiter</span>
+        <span class="mark ok" aria-hidden="true">✓</span>
+        <span class="pct">89% · 8</span><i class="bar" style="width:89%"></i>
+        <span class="sr-only">Correta</span>
+      </div>
+      <div class="opt b dim" role="listitem">
+        <span class="shape dia"></span><span class="txt">Marte</span>
+        <span class="mark no" aria-hidden="true">✕</span>
+        <span class="pct">33% · 3</span><i class="bar" style="width:33%"></i>
+      </div>
+      <div class="opt c correct" role="listitem">
+        <span class="shape cir"></span><span class="txt">Saturno</span>
+        <span class="mark ok" aria-hidden="true">✓</span>
+        <span class="pct">67% · 6</span><i class="bar" style="width:67%"></i>
+        <span class="sr-only">Correta</span>
+      </div>
+      <div class="opt d dim" role="listitem">
+        <span class="shape sqr"></span><span class="txt">Mercúrio</span>
+        <span class="mark no" aria-hidden="true">✕</span>
+        <span class="pct">11% · 1</span><i class="bar" style="width:11%"></i>
+      </div>
+    </div>
+
+    <p class="explain"><b>Pontuação parcial:</b> quem marcou as duas certas levou
+      1.200. Quem marcou uma certa e uma errada levou 600. <b>4 pessoas</b>
+      acertaram em cheio.</p>
+  </section>
+
+  <footer class="stage-bottom">
+    <div class="progress"><i style="width:75%"></i></div>
+    <div class="stage-actions">
+      <button class="btn btn-icon is-disabled" data-back title="Voltar (←)" aria-label="Voltar">←</button>
+      <button class="btn btn-primary btn-lg" data-primary data-href="stage-answering-open.html">
+        Próxima pergunta <span class="kbd">Espaço</span>
+      </button>
+      <button class="btn btn-icon" data-fullscreen title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
+      <button class="btn btn-icon" data-sfx-toggle title="Som (M)" aria-label="Som">🔊</button>
+      <a class="btn btn-icon" href="stage-shortcuts.html" data-go title="Atalhos (?)" aria-label="Atalhos">⌨</a>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+LP.stageKeys({ leaderboard: 'stage-leaderboard.html', shortcuts: 'stage-shortcuts.html' });
+LP.SFX.reveal();
+setTimeout(() => LP.SFX.correct(), 420);
+</script>
+</body>
+</html>

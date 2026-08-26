@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Telão · Lobby — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="stage">
+  <header class="stage-top">
+    <span class="room-code">QDSKCH</span>
+    <span class="qr-mini" data-qr="QDSKCH"></span>
+    <div class="stage-meta">
+      <span class="chip hide-sm">🎯 Aulão de Agentes</span>
+      <span class="chip"><span class="dot"></span> <b id="count">5</b>&nbsp;na sala</span>
+    </div>
+  </header>
+
+  <section class="scene" aria-live="polite">
+    <div class="lobby">
+      <div>
+        <span class="eyebrow">Código da sala</span>
+        <div class="code-hero">QDSKCH</div>
+        <span class="join-url">🔗 livepoll.local/j/<b>QDSKCH</b></span>
+
+        <div class="players" id="players">
+          <span class="player-pill"><span class="av">🦊</span> Ana</span>
+          <span class="player-pill"><span class="av">🐙</span> Chris</span>
+          <span class="player-pill"><span class="av">🦄</span> Duda</span>
+          <span class="player-pill"><span class="av">🐼</span> Bruno</span>
+          <span class="player-pill"><span class="av">🐧</span> Enzo</span>
+        </div>
+      </div>
+
+      <div class="tc">
+        <div class="qr-big" data-qr="QDSKCH"></div>
+        <p style="color:var(--ink-soft);font-size:clamp(14px,1.3vw,20px);margin:14px 0 0;font-weight:650">
+          📷 Aponte a câmera para entrar
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="stage-bottom">
+    <div class="progress"><i style="width:0%"></i></div>
+    <div class="stage-actions">
+      <button class="btn btn-primary btn-lg" data-primary data-href="stage-reading.html">
+        Começar a sessão <span class="kbd">Espaço</span>
+      </button>
+      <button class="btn btn-icon" data-fullscreen title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
+      <button class="btn btn-icon" data-sfx-toggle title="Som (M)" aria-label="Som">🔊</button>
+      <a class="btn btn-icon" href="stage-shortcuts.html" data-go title="Atalhos (?)" aria-label="Atalhos">⌨</a>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+LP.stageKeys({ shortcuts: 'stage-shortcuts.html' });
+
+// participantes entrando com "pop" + som
+const NEW = [['🐨','Iris'],['🦁','João'],['🐢','Lia'],['🦉','Théo']];
+const box = document.getElementById('players');
+const counter = document.getElementById('count');
+let n = 5, i = 0;
+const t = setInterval(() => {
+  if (i >= NEW.length) return clearInterval(t);
+  const [av, name] = NEW[i++];
+  const el = document.createElement('span');
+  el.className = 'player-pill';
+  el.innerHTML = '<span class="av">' + av + '</span> ' + name;
+  box.appendChild(el);
+  counter.textContent = ++n;
+  LP.SFX.join();
+}, 1600);
+</script>
+</body>
+</html>

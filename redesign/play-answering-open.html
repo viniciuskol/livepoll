@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Resposta aberta — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="phone">
+  <header class="play-top">
+    <span class="who"><span class="av">🦊</span> Ana</span>
+    <div class="metrics">
+      <span class="metric pts">⭐ 5.712</span>
+      <span class="metric streak">🔥 5</span>
+      <button class="btn btn-icon" data-sfx-toggle aria-label="Som">🔊</button>
+    </div>
+  </header>
+
+  <div class="play-body">
+    <div class="row spread" style="gap:10px">
+      <span class="eyebrow" id="prompt">Digite sua resposta</span>
+      <span class="metric" id="clock">⏱ <b id="secs">30</b>s</span>
+    </div>
+    <div class="timebar" id="tb" role="timer" aria-label="Tempo restante"><i></i></div>
+
+    <div class="fullstate" style="gap:16px;justify-content:center">
+      <div class="big" style="font-size:clamp(44px,13vw,72px)">✍️</div>
+      <p class="sub">A pergunta está no telão. Escreva com suas palavras —
+        o apresentador corrige na hora.</p>
+      <div class="field">
+        <input class="open-input" id="txt" maxlength="60" autocomplete="off"
+               placeholder="sua resposta…" aria-label="Sua resposta">
+        <span class="open-chars"><b id="n">0</b>/60</span>
+      </div>
+      <button class="btn btn-primary btn-lg is-disabled" id="send" style="width:100%">
+        Enviar resposta <span aria-hidden="true">→</span>
+      </button>
+    </div>
+  </div>
+
+  <footer class="play-foot">
+    <div class="reactions" role="group" aria-label="Reações">
+      <button data-react="👏" aria-label="Palmas">👏</button>
+      <button data-react="🔥" aria-label="Fogo">🔥</button>
+      <button data-react="😂" aria-label="Risada">😂</button>
+      <button data-react="😮" aria-label="Surpresa">😮</button>
+      <button data-react="❤️" aria-label="Coração">❤️</button>
+      <button data-react="🎉" aria-label="Festa">🎉</button>
+      <button data-react="🤯" aria-label="Mente explodindo">🤯</button>
+      <button data-react="👍" aria-label="Positivo">👍</button>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+const txt = document.getElementById('txt');
+const send = document.getElementById('send');
+const secs = document.getElementById('secs');
+let left = 30;
+const bar = LP.timebar(document.getElementById('tb'), 30, () => LP.go('play-summary.html'));
+const tick = setInterval(() => { secs.textContent = Math.max(0, --left); }, 1000);
+
+txt.addEventListener('input', () => {
+  document.getElementById('n').textContent = txt.value.length;
+  send.classList.toggle('is-disabled', txt.value.trim().length === 0);
+});
+txt.addEventListener('keydown', e => { if (e.key === 'Enter') send.click(); });
+
+send.addEventListener('click', () => {
+  if (send.classList.contains('is-disabled') || document.body.dataset.locked) return;
+  document.body.dataset.locked = '1';
+  bar.stop(); clearInterval(tick);
+  LP.SFX.pick(); LP.buzz([18, 30, 40]);
+  document.querySelector('.fullstate').innerHTML =
+    '<div class="big">📨</div>' +
+    '<div class="head">Resposta enviada</div>' +
+    '<span class="badge good" style="font-size:17px">“' +
+      txt.value.replace(/[<>&]/g, '') + '”</span>' +
+    '<p class="sub">O apresentador vai corrigir as respostas no telão. ' +
+      'Escrita diferente com o mesmo sentido também conta.</p>' +
+    '<div class="waiting"><span class="orb"></span><span class="orb"></span>' +
+      '<span class="orb"></span><span>4 de 9 enviaram</span></div>';
+  document.getElementById('prompt').textContent = '✅ Enviado';
+  document.getElementById('clock').textContent = '⏳ aguardando';
+  setTimeout(() => LP.go('play-summary.html'), 2400);
+});
+</script>
+</body>
+</html>

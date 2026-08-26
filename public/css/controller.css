@@ -1,0 +1,143 @@
+/* LivePoll controller: the player screen as a game pad (SPEC-UX).
+   Laid out for 390x844 first - identity bar, one scene, reactions - and never
+   scrolls while a question is open. */
+
+.ctrl {
+  position: fixed; inset: 0;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  /* Without an explicit column the implicit `auto` track takes the widest
+     min-content in the whole shell - the eight no-wrap reaction buttons - and
+     pushes the option grid past the right edge of a 390px screen. */
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+}
+.ctrl.hidden { display: none !important; }
+body.ctrl-on { overflow: hidden; }
+
+/* ---- identity bar -------------------------------------------------------
+   The nickname, avatar, score and rank live in a single 48px line. The old
+   app topbar plus the #me-pill/#score-pill pair grew the header to 103px on a
+   390px screen and pushed the options below the fold. */
+.ctrl-bar {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 48px; padding: 6px 12px calc(6px) 12px;
+  background: var(--card-solid); border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.ctrl-me { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ctrl-me b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34vw; }
+.ctrl-avatar { font-size: 1.35rem; line-height: 1; }
+.ctrl-stat {
+  padding: 4px 10px; border-radius: 999px; background: var(--elev-strong);
+  border: 1px solid var(--line); font-weight: 800; font-variant-numeric: tabular-nums;
+  font-size: 0.82rem; white-space: nowrap;
+}
+.ctrl-icon {
+  min-width: 44px; min-height: 44px; border-radius: 12px; cursor: pointer;
+  background: transparent; color: var(--text); border: 1px solid var(--line); font-size: 1rem;
+}
+
+/* ---- scene -------------------------------------------------------------- */
+.ctrl-center {
+  min-height: 0; padding: 12px; display: grid; align-content: center; justify-items: center;
+  /* An `auto` column would size itself to the widest option and push the grid
+     past the viewport; minmax(0,1fr) keeps everything inside 390px. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px; text-align: center;
+}
+.ctrl-center.top { align-content: stretch; }
+/* This is the one surface where the player's hands are: the option grid takes
+   the whole scene rather than four 72px buttons and 290px of nothing under
+   them. The reaction bar stays pinned in the footer (its own grid row), so a
+   bigger target can never grow over it. */
+.ctrl-center.top > .ctrl-scene { height: 100%; }
+.ctrl-scene { display: flex; flex-direction: column; gap: 10px; width: 100%; min-height: 0; }
+.ctrl-scene > .ctrl-opts { flex: 1 1 auto; min-height: 0; }
+.ctrl-title { margin: 0; font-size: clamp(1.3rem, 6vw, 1.9rem); font-weight: 900; line-height: 1.15; }
+.ctrl-note { margin: 0; color: var(--muted); font-size: 0.95rem; }
+.ctrl-big { font-size: clamp(3rem, 22vw, 6rem); line-height: 1; }
+.ctrl-prompt { margin: 0; font-size: clamp(1rem, 4.4vw, 1.3rem); font-weight: 700; line-height: 1.25; }
+
+/* expectant pulse while the presenter reads the question out loud */
+.watch { display: grid; gap: 10px; justify-items: center; }
+.watch .eyes { font-size: clamp(3.4rem, 24vw, 6rem); line-height: 1; animation: watch-pulse 1.8s ease-in-out infinite; }
+
+/* option grid: the targets absorb the slack of the scene, 72px is the floor */
+.ctrl-opts { display: grid; gap: 10px; width: 100%; grid-auto-rows: minmax(72px, 1fr); }
+.ctrl-opts .opt { min-height: 72px; font-size: 1.15rem; }
+.ctrl-opts .opt .shape { width: 1.7em; height: 1.7em; }
+.ctrl-ring { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.ctrl-ring .ring { width: 62px; }
+.ctrl-ring .count { font-weight: 800; font-size: 0.95rem; color: var(--muted); }
+
+/* answered confirmation */
+.sent-card { display: grid; gap: 10px; justify-items: center; }
+.sent-shape { width: 74px; height: 74px; background: currentColor; }
+.sent-wrap { display: grid; place-items: center; width: 96px; height: 96px; border-radius: 26px; }
+
+/* reveal */
+.points { font-size: clamp(2.4rem, 15vw, 4rem); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px;
+  background: var(--elev-strong); border: 1px solid var(--line); font-weight: 800; font-size: 0.9rem;
+}
+.badge.up { color: var(--up); border-color: currentColor; }
+.badge.down { color: var(--down); border-color: currentColor; }
+.badge.fire { color: var(--accent); border-color: currentColor; }
+/* The first correct answer of a run used to show "Position held" as its
+   strongest line - the weakest sentence in the game at its best moment. */
+.badge.spark { color: var(--ok); border-color: currentColor; font-size: 1rem; }
+
+/* full-screen right/wrong flash */
+.flash { position: fixed; inset: 0; z-index: 50; pointer-events: none; opacity: 0; }
+.flash.ok { background: radial-gradient(circle, rgba(46, 194, 126, 0.9), rgba(46, 194, 126, 0.35)); }
+.flash.bad { background: radial-gradient(circle, rgba(255, 92, 122, 0.9), rgba(255, 92, 122, 0.35)); }
+.flash.run { animation: flash-out 0.75s ease-out forwards; }
+
+/* leaderboard with the player's own row anchored */
+.ctrl-lb { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; width: 100%; }
+.ctrl-lb li {
+  display: grid; grid-template-columns: 2.2em 1.5em 1fr auto; align-items: center; gap: 8px;
+  padding: 10px 12px; border-radius: 14px; background: var(--elev); border: 1px solid var(--line);
+  font-weight: 700; text-align: left;
+}
+.ctrl-lb li.me { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.ctrl-lb .lb-rank { color: var(--rank-ink); font-weight: 900; }
+.ctrl-lb .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* personal end-of-game card */
+.summary { display: grid; gap: 10px; width: 100%; }
+.summary-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px; border-radius: 14px; background: var(--elev); border: 1px solid var(--line);
+}
+.summary-row b { font-size: 1.2rem; }
+
+/* ---- reactions ---------------------------------------------------------- */
+.ctrl-foot {
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  background: var(--card-solid); border-top: 1px solid var(--line);
+}
+.ctrl-foot .reactions { justify-content: center; gap: 4px; flex-wrap: nowrap; overflow-x: auto; min-width: 0; }
+.ctrl-foot .reactions button { min-height: 46px; min-width: 40px; flex: 1 1 40px; max-width: 60px; font-size: 1.3rem; }
+
+/* Short phones: shrink the chrome instead of scrolling the options away. */
+@media (max-height: 700px) {
+  .ctrl-opts { grid-auto-rows: minmax(60px, 1fr); }
+  .ctrl-opts .opt { min-height: 60px; font-size: 1.05rem; }
+  .ctrl-foot .reactions button { min-height: 44px; min-width: 44px; }
+}
+/* Landscape phone: options in two columns so they still fit above the fold. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .ctrl-opts { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(52px, 1fr); }
+  .ctrl-opts .opt { min-height: 52px; font-size: 1.05rem; }
+  .watch .eyes { font-size: 2.4rem; }
+}
+
+@keyframes watch-pulse { 50% { transform: scale(1.12); opacity: 0.7; } }
+@keyframes flash-out { from { opacity: 0.85; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .watch .eyes { animation: none !important; }
+  .flash { display: none !important; }
+}

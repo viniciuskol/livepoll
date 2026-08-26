@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Seu resumo — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="phone">
+  <header class="play-top">
+    <span class="who"><span class="av">🦊</span> Ana</span>
+    <div class="metrics">
+      <span class="metric pts">⭐ 7.412</span>
+      <button class="btn btn-icon" data-sfx-toggle aria-label="Som">🔊</button>
+    </div>
+  </header>
+
+  <div class="play-body">
+    <div class="fullstate" style="gap:12px">
+      <div class="big">🏆</div>
+      <div class="head" style="background:linear-gradient(100deg,#ffd76a,#ff8a3d);
+           -webkit-background-clip:text;background-clip:text;color:transparent">
+        1º lugar!
+      </div>
+      <p class="sub">Você fechou o Aulão de Agentes na frente de 8 pessoas.</p>
+
+      <div class="stats" style="width:100%;max-width:340px">
+        <div class="stat"><div class="v" data-v="7">0</div><div class="k">Acertos de 8</div></div>
+        <div class="stat"><div class="v">🔥 <span data-v="5">0</span></div><div class="k">Melhor sequência</div></div>
+        <div class="stat"><div class="v" data-v="7412">0</div><div class="k">Pontos</div></div>
+        <div class="stat"><div class="v"><span data-v="3">0</span>,4s</div><div class="k">Resposta média</div></div>
+      </div>
+
+      <div class="badges">
+        <span class="badge fire">⚡ Mais rápida da sala</span>
+        <span class="badge good">🎯 Bloco 1 perfeito</span>
+      </div>
+
+      <a class="btn btn-primary btn-lg" href="index.html" data-go style="margin-top:6px">
+        Jogar de novo <span aria-hidden="true">→</span>
+      </a>
+    </div>
+  </div>
+
+  <footer class="play-foot">
+    <div class="reactions" role="group" aria-label="Reações">
+      <button data-react="👏" aria-label="Palmas">👏</button>
+      <button data-react="🔥" aria-label="Fogo">🔥</button>
+      <button data-react="😂" aria-label="Risada">😂</button>
+      <button data-react="😮" aria-label="Surpresa">😮</button>
+      <button data-react="❤️" aria-label="Coração">❤️</button>
+      <button data-react="🎉" aria-label="Festa">🎉</button>
+      <button data-react="🤯" aria-label="Mente explodindo">🤯</button>
+      <button data-react="👍" aria-label="Positivo">👍</button>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+LP.confetti(6000);
+LP.say('Fim da partida. Você terminou em 1º lugar com 7.412 pontos e 7 acertos de 8.');
+LP.SFX.fanfare();
+LP.buzz([30, 50, 30, 50, 80]);
+document.querySelectorAll('[data-v]').forEach((el, i) => {
+  const d = LP.reduced ? 0 : 350 + i * 150;
+  setTimeout(() => LP.countUp(el, Number(el.dataset.v), 1100), d);
+});
+</script>
+</body>
+</html>

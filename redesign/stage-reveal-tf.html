@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Telão · Reveal V/F — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="stage">
+  <header class="stage-top">
+    <span class="room-code">QDSKCH</span>
+    <span class="qr-mini" data-qr="QDSKCH"></span>
+    <div class="stage-meta">
+      <span class="chip hide-sm">📦 Bloco 1 · Aquecimento</span>
+      <span class="chip">Pergunta <b>5</b> de <b>8</b></span>
+      <span class="chip"><span class="dot"></span> <b>9</b>&nbsp;na sala</span>
+    </div>
+  </header>
+
+  <section class="scene vcenter reveal" data-fit-box aria-live="polite">
+    <div class="q-head">
+      <h1 class="question">A Lua é um satélite natural da Terra.</h1>
+    </div>
+
+    <div class="options tf" role="list">
+      <div class="opt tf-true correct" role="listitem">
+        <span class="shape tri"></span><span class="txt">Verdadeiro</span>
+        <span class="mark ok" aria-hidden="true">✓</span>
+        <span class="pct">89% · 8</span><i class="bar" style="width:89%"></i>
+        <span class="sr-only">Resposta correta</span>
+      </div>
+      <div class="opt tf-false dim" role="listitem">
+        <span class="shape dia"></span><span class="txt">Falso</span>
+        <span class="mark no" aria-hidden="true">✕</span>
+        <span class="pct">11% · 1</span><i class="bar" style="width:11%"></i>
+      </div>
+    </div>
+
+    <p class="explain"><b>Por quê:</b> a Lua orbita a Terra e não foi construída
+      por ninguém — é o único satélite natural do nosso planeta.</p>
+  </section>
+
+  <footer class="stage-bottom">
+    <div class="progress"><i style="width:62%"></i></div>
+    <div class="stage-actions">
+      <button class="btn btn-icon is-disabled" data-back title="Voltar (←)" aria-label="Voltar">←</button>
+      <button class="btn btn-primary btn-lg" data-primary data-href="stage-answering-multi.html">
+        Próxima pergunta <span class="kbd">Espaço</span>
+      </button>
+      <button class="btn btn-icon" data-fullscreen title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
+      <button class="btn btn-icon" data-sfx-toggle title="Som (M)" aria-label="Som">🔊</button>
+      <a class="btn btn-icon" href="stage-shortcuts.html" data-go title="Atalhos (?)" aria-label="Atalhos">⌨</a>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+LP.stageKeys({ leaderboard: 'stage-leaderboard.html', shortcuts: 'stage-shortcuts.html' });
+LP.SFX.reveal();
+setTimeout(() => LP.SFX.correct(), 420);
+</script>
+</body>
+</html>

@@ -1,0 +1,527 @@
+/* LivePoll stage: the host screen as a projected slide deck (SPEC-UX).
+   Sized for 1280x720 first - the worst realistic projector - and checked at
+   1920x1080. Nothing here scrolls: every state fills the viewport. */
+
+.stage {
+  /* Measured palette: 17.4:1 ink on ground, 10.7:1 muted, 15.6:1 on the strip. */
+  --stage-bg: #0b0320;
+  --stage-bg-2: #1a0740;
+  --stage-deep: #04010d;
+  --stage-strip: #1b0d3d;
+  --stage-accent: #ffd166;  /* 13.9:1 on the ground */
+  --stage-ink: #f2ecff;
+  --stage-muted: #c3b7e8;
+  --stage-line: rgba(255, 255, 255, 0.16);
+  --stage-pad: clamp(12px, 2.2vw, 30px);
+  /* ---- the projector type ramp ----------------------------------------
+     Readable at 8 metres on a 100" 1080p wall means ~15-20 arcmin of angular
+     height for body text: roughly 25 rendered px at 1280x720 and 38 px at
+     1920x1080 (the 5 arcmin acuity *limit* is ~8 px / 12 px - anything near it
+     is a test chart, not a slide).
+     There is exactly *one* size on the stage: `--stage-unit`, the body size of
+     stage prose. Everything else is a multiple of it in `em`, so the whole
+     ramp moves together when js/fit.js scales the scene - it does that by
+     setting the scene's own `font-size`, an inherited property the browser is
+     guaranteed to propagate, rather than a custom property (Chromium does not
+     reliably re-resolve a descendant `font-size` that reads a custom property
+     changed in the same task, which silently pinned every scene at 1x).
+     Every multiple is also capped in `vh`, so a scene with room to spare stops
+     growing at a sane size instead of turning into one letter per line. */
+  --stage-unit: clamp(1.25rem, 1.5vw + 0.6vh, 2.1rem);
+  --meta-size: clamp(1rem, 1.25vw + 0.25vh, 1.55rem);
+
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background:
+    radial-gradient(circle at 15% 0%, var(--stage-bg-2), transparent 55%),
+    linear-gradient(170deg, var(--stage-bg), var(--stage-deep) 92%);
+  color: var(--stage-ink);
+  overflow: hidden;
+}
+@media (prefers-color-scheme: light) {
+  .stage {
+    --stage-bg: #f7f4ff;
+    --stage-bg-2: #e6dcff;
+    /* The deep stop has to follow the theme: a hardcoded near-black bottom
+       turned the light stage into dark-on-dark at the foot of the screen. */
+    --stage-deep: #e4dcff;
+    --stage-strip: #ece5ff;
+    --stage-accent: #5b1fb0; /* 7.6:1 on the light strip (gold was 1.7) */
+    --stage-ink: #1b0b33;   /* 16.9:1 */
+    --stage-muted: #4a3570; /* 9.5:1 */
+    --stage-line: rgba(27, 11, 51, 0.18);
+  }
+}
+.stage.hidden { display: none !important; }
+body.stage-on { overflow: hidden; }
+
+/* ---- persistent top strip ---------------------------------------------- */
+.stage-strip {
+  display: flex; align-items: center; gap: clamp(10px, 2vw, 26px);
+  padding: 8px var(--stage-pad);
+  /* Opaque and above the confetti canvas (z-index 40): the finale used to rain
+     paper over the room code (P2-1, P2-5). */
+  background: var(--stage-strip);
+  border-bottom: 1px solid var(--stage-line);
+  position: relative; z-index: 66;
+  font-size: var(--meta-size);
+}
+.strip-code { display: flex; align-items: baseline; gap: 8px; }
+.strip-code b {
+  font-size: clamp(1.6rem, 2.4vw, 3rem); font-weight: 900; letter-spacing: 0.12em;
+  color: var(--stage-accent);
+}
+/* The "ROOM CODE" caption measured 9 px on a 720p projection - about 3 arcmin
+   at 8 m, i.e. below the acuity limit: ink that nobody in the room can resolve.
+   Growing it would cost the code itself the width it needs, and the code is
+   already unmistakable (gold, letter-spaced, next to the QR). So the caption
+   stops pretending to be visible and becomes the accessible name of the code
+   instead - still read out by screen readers, no longer decorative noise. */
+.strip-label {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.strip-qr { width: clamp(44px, 4.4vw, 66px); height: auto; background: #fff; padding: 3px; border-radius: 6px; image-rendering: pixelated; }
+.strip-sep { flex: 1; min-width: 0; }
+.strip-meta { display: flex; align-items: center; gap: clamp(8px, 1.6vw, 20px); color: var(--stage-muted); font-weight: 700; }
+.strip-meta b { color: var(--stage-ink); }
+.strip-block { max-width: 32vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- centre: one region per state -------------------------------------- */
+.stage-center {
+  min-height: 0; padding: clamp(10px, 2vh, 28px) var(--stage-pad);
+  /* `align-items: stretch` hands the scene the whole centre region; without it
+     the scene was only as tall as its content and floated in the middle,
+     leaving 211px of dead space above *and* below the reading prompt at
+     1280x720 (SPEC-UX: "nada de espaco morto"). */
+  display: grid; align-items: stretch; justify-items: center; text-align: center;
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Flex column rather than grid so exactly one child - the option grid, the
+   leaderboard or the reveal bars - can absorb the slack (`flex: 1`) while the
+   prompt, timer and explanation keep their natural size. */
+.scene {
+  /* The scene's own font-size *is* the scale of the scene: js/fit.js replaces
+     it with `<unit> * fit` px and every child follows in em. */
+  font-size: var(--stage-unit);
+  /* A cap, not a column: 1800px left ~380px of dead wall on each side of a
+     2560x1080 (21:9) meeting-room screen and pulled every scene's ink fill down
+     by a third. Ultrawide projectors and TV panels are common, so the stage
+     takes the width it is given up to a measure where a leaderboard row is
+     still a row and not a horizon - and the individual compositions below
+     (option grid, ranking, podium) carry their own, tighter measures. */
+  width: 100%; max-width: min(2400px, 100%); height: 100%;
+  /* Without `min-height: 0` the automatic minimum size of the grid item is its
+     min-content height, so a scene taller than the centre region simply grew
+     past it and got clipped by the stage instead of letting flex-shrink work on
+     its children. That is what pushed the timer ring under the footer and hid
+     the "save grades" button. */
+  min-height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: clamp(8px, 1.6vh, 22px);
+}
+.scene > .stage-opts, .scene > .stage-lb, .scene > .podium,
+.scene > .roster, .scene > .open-wait, .scene > .block-card {
+  flex: 1 1 auto; min-height: 0;
+}
+.scene-prompt {
+  margin: 0; font-weight: 900; line-height: 1.08; letter-spacing: -0.01em;
+  font-size: min(2.25em, 16vh);
+  /* ~4 lines before it would overflow; longer prompts shrink instead. */
+  max-width: 22ch; text-wrap: balance;
+}
+/* A long prompt on a scene that also carries options is a *reminder* of
+   something the presenter already read out loud on the `reading` slide, so it
+   is the element that gives the room back - a wider measure and a smaller ramp
+   buy the option labels (which nobody has read yet) the height they need. */
+.scene-prompt.long {
+  font-size: min(1.15em, 7vh); max-width: 62ch; line-height: 1.18;
+}
+.scene-kicker {
+  margin: 0; color: var(--stage-muted); font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.18em; font-size: min(0.8em, 3.6vh);
+}
+.scene-note { margin: 0; color: var(--stage-muted); font-size: min(1em, 4.6vh); max-width: 60ch; }
+.scene-image { max-height: 32vh; max-width: 70vw; border-radius: 16px; }
+
+/* lobby: the join call fills the top of the region, the roster takes the rest */
+.lobby-grid {
+  display: grid; grid-template-columns: minmax(0, 1.15fr) auto;
+  gap: clamp(16px, 3vw, 48px); align-items: center; width: 100%; flex: none;
+}
+.lobby-code {
+  /* 20vh, not more: past that the code is eating the room the names need, and
+     a 200px code is already unmissable from the back of a hall. */
+  font-size: min(5.7em, 20vh);
+  font-weight: 900; letter-spacing: 0.08em; line-height: 1; color: var(--stage-accent);
+}
+.lobby-join { font-size: min(1.3em, 6vh); font-weight: 700; color: var(--stage-ink); }
+.lobby-qr { background: #fff; padding: 10px; border-radius: 16px; line-height: 0; }
+.lobby-qr canvas { width: clamp(140px, 17vw, 300px); height: auto; image-rendering: pixelated; }
+/* The roster absorbs the slack of the region (`flex: 1` above) instead of
+   sitting in a 4-row box: 40 names should read as a full wall, not as three
+   rows and 300px of nothing. Chips that still do not fit are folded into a
+   "+N more" chip by js/host-stage.js - 19 invisible names next to a strip
+   saying "40 in the room" is a lie the stage was telling. */
+.roster {
+  display: flex; flex-wrap: wrap; gap: clamp(6px, 0.8vh, 12px); justify-content: center;
+  overflow: hidden; align-content: space-evenly; width: 100%;
+  /* The offset parent of the chips: the fold-away pass measures them with
+     `offsetTop`, which is a layout box - `getBoundingClientRect` reports the
+     chip's *entry animation* transform and made the pass think a row fitted
+     while it was still scaled down. */
+  position: relative;
+}
+.roster-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 0.34em 0.8em; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1); border: 1px solid var(--stage-line);
+  font-weight: 800; font-size: min(0.85em, 3.4vh);
+  box-sizing: border-box; white-space: nowrap;
+  animation: chip-pop 0.42s cubic-bezier(0.2, 1.3, 0.4, 1) backwards;
+}
+/* A crowded room trades chip size for names on the wall: at 40 players the
+   point is the crowd, at 6 it is the six people. */
+.roster.dense { gap: clamp(5px, 0.6vh, 9px); }
+.roster.dense .roster-chip { font-size: min(0.62em, 2.4vh); padding: 0.3em 0.6em; gap: 6px; }
+.roster-chip.more { background: transparent; border-style: dashed; color: var(--stage-muted); }
+@media (prefers-color-scheme: light) { .roster-chip { background: rgba(27, 11, 51, 0.07); } }
+
+/* answering / reveal option grid */
+/* The row floor is `min(em, px/vh)`: a floor in px alone is a height the fit
+   search cannot buy back, and at 800x600 a six-option question collapses to one
+   column (see the 900px query) whose six rows need ~336px whatever the type
+   does - the search bottomed out at 0.55 with 50px still outside the region.
+   The em term only bites once the scene has already been scaled down, so 720p
+   and 1080p keep the tile size they were designed with. */
+.stage-opts { display: grid; gap: clamp(8px, 1.4vh, 18px); width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: stretch; grid-auto-rows: minmax(min(2.6em, clamp(56px, 9vh, 104px)), 1fr); }
+.stage-opts.cols-1 { grid-template-columns: minmax(0, 1fr); }
+.stage-opts .opt {
+  min-height: min(2.6em, clamp(56px, 9vh, 104px));
+  /* The option label is the text the room reads at 8 m; it was 17.6 px at 720p
+     (~5.5 arcmin, essentially the acuity limit). The `vh` ceiling keeps a
+     two-option question from turning into two words per line. */
+  font-size: min(1.1em, 7vh);
+  border-radius: 18px; padding: clamp(10px, 1.4vh, 22px) clamp(12px, 1.4vw, 26px);
+  gap: clamp(10px, 1.2vw, 22px);
+  animation: pop-in 0.34s backwards;
+}
+.stage-opts .opt .shape { width: 1.1em; height: 1.1em; }
+.stage-opts .opt { position: relative; overflow: hidden; }
+.stage-opts .opt.is-correct { transform: scale(1.035); box-shadow: 0 0 0 5px var(--ok), 0 0 46px rgba(46, 194, 126, 0.55); }
+.stage-opts .opt .tick { font-size: 1.2em; }
+/* The distribution rides inside the option: a strip along its bottom edge in
+   the label's own ink, so it can never eat into the label contrast. */
+.stage-opts .opt .pct { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 0.9em; white-space: nowrap; }
+.stage-opts .opt .fill {
+  position: absolute; left: 0; bottom: 0; height: 9px; width: 0;
+  background: currentColor; opacity: 0.85; border-radius: 0 9px 9px 0;
+  animation: grow 0.8s ease forwards;
+}
+.stage-opts.revealed .opt { min-height: min(2.4em, clamp(52px, 8vh, 92px)); }
+.stage-answers {
+  display: flex; align-items: center; gap: 14px; font-weight: 800;
+  font-size: min(1.25em, 6.5vh);
+  font-variant-numeric: tabular-nums;
+}
+
+/* timer ring: base styles live in app.css, the stage only resizes it - in em,
+   so a sparse scene gets a bigger clock along with everything else. */
+.stage .ring { width: min(4.2em, 20vh); }
+.stage .ring .track { stroke: var(--stage-line); }
+.stage .ring text { fill: var(--stage-ink); }
+.timer-row { display: flex; align-items: center; justify-content: center; gap: clamp(12px, 2vw, 32px); }
+
+/* reveal */
+.explain {
+  margin: 0; padding: clamp(10px, 1.6vh, 20px) clamp(14px, 2vw, 30px); border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08); border: 1px solid var(--stage-line);
+  color: var(--stage-ink); max-width: 76ch; line-height: 1.35;
+  /* "explicacao em corpo legivel" (SPEC-UX): the same ramp as the other stage
+     prose, not the 15 px it used to be. */
+  font-size: min(1em, 4.6vh);
+}
+@media (prefers-color-scheme: light) { .explain { background: rgba(27, 11, 51, 0.05); } }
+
+/* leaderboard */
+/* `grid-auto-rows: max-content` plus `space-evenly`: the list still absorbs the
+   slack of the centre region (`flex: 1`), but as air *between* the rows instead
+   of inside them. Stretching the tracks turned a two-player ranking on a 1080p
+   stage into two 403px slabs holding one 30px line each. */
+.stage-lb {
+  list-style: none; margin: 0; padding: 0; display: grid;
+  grid-auto-rows: max-content; align-content: space-evenly;
+  gap: clamp(6px, 1.1vh, 14px); width: min(2100px, 100%);
+}
+.stage-lb li {
+  min-height: clamp(58px, 10vh, 112px);
+  display: grid; grid-template-columns: 2.4em 1.6em 1fr auto auto; align-items: center; gap: clamp(8px, 1.4vw, 18px);
+  padding: clamp(8px, 1.4vh, 18px) clamp(12px, 1.6vw, 26px); border-radius: 16px;
+  background: rgba(255, 255, 255, 0.09); border: 1px solid var(--stage-line);
+  /* The ranking is a show moment and it was the *smallest* type on the stage
+     (20.5 px at 720p). Nobody cheers for a name they cannot read. */
+  font-size: min(1.32em, 7.5vh);
+  font-weight: 800; text-align: left;
+  animation: slide-in 0.45s backwards;
+}
+@media (prefers-color-scheme: light) { .stage-lb li { background: rgba(27, 11, 51, 0.06); } }
+.stage-lb .lb-rank { font-size: 1em; color: var(--stage-accent); }
+.stage-lb .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-lb .lb-score { font-variant-numeric: tabular-nums; }
+/* The movement marker is part of the stage ramp like everything else: app.css
+   sizes `.lb-delta` in *rem* for the phone, which on the stage is a 12.8px run
+   next to a 54-81px row - and for a player who held their place it is a bare
+   `·` in full ink immediately left of the score, which reads as a stray
+   separator ("· 893") rather than as "held". Dimmed, in em, in a column of its
+   own so the scores still line up. */
+.stage-lb .lb-delta {
+  /* inline-block: num `span` inline o `min-width` é ignorado, então o marcador
+     de "manteve a posição" ficava com largura zero e a coluna que deveria
+     manter os números alinhados não existia. */
+  display: inline-block;
+  font-size: min(0.62em, 3.4vh); min-width: 2.6em; text-align: right;
+  /* 0.85, not 0.65: at 0.65 the marker composited to 3.5:1 on the light row,
+     which only clears WCAG AA as *large* text. 0.85 keeps it 5.7:1 (light) /
+     6.8:1 (dark) while still reading as secondary next to the score. */
+  color: var(--stage-muted); opacity: 0.85;
+}
+.stage-lb .lb-delta.held { opacity: 0.5; }
+.stage-lb .lb-delta.up { color: var(--up); opacity: 1; }
+.stage-lb .lb-delta.down { color: var(--down); opacity: 1; }
+.stage-lb li.top1 { background: linear-gradient(100deg, rgba(255, 209, 102, 0.28), rgba(255, 209, 102, 0.08)); border-color: var(--accent); }
+
+/* block intro + podium */
+.block-card {
+  display: grid; gap: clamp(10px, 2vh, 28px); justify-items: center;
+  /* Spread, not centred: a transition card with everything bunched in the
+     middle of a 902px region is the "espaco morto" the brief rules out. */
+  align-content: space-between; width: 100%; height: 100%;
+}
+.block-index {
+  font-size: min(1.1em, 5vh);
+  font-weight: 800; letter-spacing: 0.24em; text-transform: uppercase; color: var(--stage-accent);
+}
+.block-name {
+  font-size: min(4.5em, 30vh);
+  font-weight: 900; line-height: 1.03; margin: 0; max-width: 22ch; text-wrap: balance;
+}
+/* A transition card is a breath, not a void: the rule under the name gives the
+   composition a horizon so the region reads as designed rather than as empty. */
+.block-rule {
+  width: min(1100px, 80%); height: clamp(4px, 0.6vh, 8px); border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--stage-accent), transparent);
+}
+.stage .podium { margin: 0; gap: clamp(10px, 1.6vw, 32px); width: 100%; height: 100%; align-items: flex-end; }
+.stage .podium > div { max-width: none; }
+/* The bars are a proportion of the region, not three fixed slabs sitting at the
+   bottom of it: with fixed min-heights the finale left the space between the
+   champion line and the podium empty on a 1080p stage. */
+.stage .podium .p1 { min-height: clamp(150px, 34vh, 460px); height: 100%; }
+.stage .podium .p2 { min-height: clamp(115px, 26vh, 360px); height: 78%; }
+.stage .podium .p3 { min-height: clamp(90px, 21vh, 290px); height: 62%; }
+.stage .podium .name { font-size: min(1.2em, 5.4vh); }
+.stage .podium .score { font-size: min(1.6em, 7vh); }
+.stage .podium .medal { font-size: min(2.4em, 10vh); }
+.champion { margin: 0; font-size: min(2.2em, 12vh); font-weight: 900; display: flex; align-items: center; justify-content: center; gap: 0.3em; }
+.champion .who { color: var(--stage-accent); }
+.champion .cup { font-size: 0.9em; }
+
+/* ---- the finale ---------------------------------------------------------
+   `ended` is the applause, and it used to be the emptiest screen of the
+   session: a kicker, one line and three small bars adrift in the middle of the
+   stage. It is now a composition - the champion above, the podium anchored on
+   the floor of the region, and the width next to it carrying what the top three
+   cannot say: the rest of the standings and the numbers of the whole session. */
+.scene.finale { flex-direction: row; align-items: stretch; gap: clamp(14px, 2.4vw, 44px); }
+.finale-main { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: clamp(6px, 1.2vh, 16px); flex: 1.45 1 0; min-width: 0; min-height: 0; }
+.finale-head { display: grid; gap: clamp(4px, 0.8vh, 12px); justify-items: center; flex: none; width: 100%; }
+/* Fewer than four players: there is no "rest of the table" to show, so the
+   podium takes the whole width and the numbers become a band under it. */
+.scene.finale.solo { flex-direction: column; }
+.scene.finale.solo .finale-side { width: 100%; flex: none; }
+.finale-side { display: flex; flex-direction: column; justify-content: flex-start; gap: clamp(8px, 1.4vh, 18px); min-height: 0; flex: 1 1 0; min-width: 0; }
+/* A lista de posições não cede altura: ela é curta e recortá-la parece defeito.
+   Quem cede é o painel de números, que tem folga de sobra no próprio corpo. */
+.finale-side .finale-rest { flex: none; }
+.finale-side .finale-stats { flex: 1 1 auto; min-height: 0; }
+.finale-rest {
+  list-style: none; margin: 0; padding: 0; display: grid; gap: clamp(4px, 0.8vh, 10px);
+  /* `align-content: end` com `min-height: 0` fazia a grade transbordar para
+     *cima*, por cima do título da coluna — e um estouro para cima não aparece
+     em `scrollHeight`, então o passo de fit não tinha como perceber. Ancorada no
+     início e recortada, a lista cede altura sem invadir o vizinho. */
+  min-height: 0; align-content: start; overflow: hidden;
+}
+.finale-rest li {
+  display: grid; grid-template-columns: 2.2em 1.5em minmax(0, 1fr) auto; align-items: center;
+  gap: clamp(6px, 1vw, 14px); text-align: left; font-weight: 800;
+  font-size: min(0.9em, 4.2vh);
+  padding: 0.28em 0.7em; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08); border: 1px solid var(--stage-line);
+}
+@media (prefers-color-scheme: light) { .finale-rest li { background: rgba(27, 11, 51, 0.06); } }
+.finale-rest .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.finale-rest li.rest-more { grid-template-columns: minmax(0, 1fr); justify-items: center; color: var(--stage-muted); background: none; }
+.finale-rest .lb-score { font-variant-numeric: tabular-nums; }
+.finale-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(6px, 1vh, 14px); }
+.scene.finale.solo .finale-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.finale-stats .stat {
+  display: grid; gap: 0.1em; padding: 0.4em 0.6em; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07); border: 1px solid var(--stage-line);
+  align-content: center;
+}
+@media (prefers-color-scheme: light) { .finale-stats .stat { background: rgba(27, 11, 51, 0.05); } }
+.finale-stats .stat b { font-size: min(1.5em, 5.2vh); line-height: 1; font-variant-numeric: tabular-nums; color: var(--stage-accent); }
+.finale-stats .stat-label { font-size: min(0.62em, 3vh); color: var(--stage-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; }
+.finale-stats .stat-note {
+  font-size: min(0.62em, 3vh); color: var(--stage-ink); font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.finale-thanks { flex: none; font-weight: 800; color: var(--stage-ink); }
+
+/* ---- footer: progress + one primary action ------------------------------ */
+.stage-foot {
+  display: grid; gap: 8px; padding: 10px var(--stage-pad) calc(10px + env(safe-area-inset-bottom));
+  background: var(--stage-strip); border-top: 1px solid var(--stage-line);
+  position: relative; z-index: 66;
+}
+.progress { height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+@media (prefers-color-scheme: light) { .progress { background: rgba(27, 11, 51, 0.12); } }
+.progress > i { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--shape-5), var(--accent)); transition: width 0.4s ease; }
+.foot-row { display: flex; align-items: center; gap: clamp(8px, 1.4vw, 18px); }
+.btn-primary-stage {
+  flex: 1; min-height: clamp(48px, 7vh, 66px); font-size: clamp(1rem, 1.5vw, 1.6rem);
+  font-weight: 900; letter-spacing: 0.01em;
+}
+.foot-secondary { display: flex; gap: 6px; flex: none; }
+.stage-icon {
+  min-width: 46px; min-height: 46px; padding: 6px 12px; border-radius: 14px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.09); color: var(--stage-ink);
+  border: 1px solid var(--stage-line); font-weight: 800; font-size: 1rem;
+}
+@media (prefers-color-scheme: light) { .stage-icon { background: rgba(27, 11, 51, 0.06); } }
+.stage-icon[aria-pressed="true"] { background: var(--accent); color: #22062f; border-color: transparent; }
+.stage-icon:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---- overlays: shortcuts + open-answer grading ------------------------- */
+.stage-overlay {
+  position: fixed; inset: 0; z-index: 75; display: grid; place-items: center;
+  padding: 4vh 4vw; background: rgba(4, 0, 16, 0.82);
+}
+.stage-overlay .sheet {
+  width: min(860px, 100%); max-height: 90vh; overflow: auto;
+  background: var(--card-solid); color: var(--text); border: 1px solid var(--line);
+  border-radius: 22px; padding: clamp(16px, 3vw, 30px); box-shadow: var(--shadow);
+}
+.keys { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.keys li { display: grid; grid-template-columns: 12ch 1fr; gap: 12px; align-items: center; }
+.keys kbd {
+  display: inline-block; padding: 5px 10px; border-radius: 8px; font-weight: 800; font-size: 0.85rem;
+  background: var(--elev-strong); border: 1px solid var(--line); font-family: inherit;
+}
+/* The grading block is a scene nested in the reveal scene. It has to live
+   inside the centre region like everything else (the stage never scrolls), so
+   the *rows* take the scroll and the "save" button stays reachable: with three
+   answer groups at 1280x720 it was already under the footer, and there was no
+   way to save a grade from the reveal screen at all. */
+.scene > .scene { flex: 1 1 auto; min-height: 0; height: auto; justify-content: flex-start; }
+.grade-list { display: grid; gap: 8px; margin: 12px 0; min-height: 0; overflow-y: auto; width: 100%; }
+.grade-pick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+/* One row per distinct answer, with its share of the room riding inside the
+   row: the reveal used to print the same strings twice - once as distribution
+   bars, once as grading rows - and that duplication is what overflowed the
+   scene. */
+.stage .grade-list .group-row {
+  position: relative; overflow: hidden;
+  font-size: min(1em, 4.2vh);
+}
+.stage .grade-list .group-row .share {
+  position: absolute; left: 0; bottom: 0; height: 5px; width: 0;
+  background: var(--accent); opacity: 0.75; border-radius: 0 5px 5px 0;
+  animation: grow 0.7s ease forwards;
+}
+.stage .grade-list .group-row .btn { font-size: 0.8em; }
+.grade-list .group-row:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* The reading screen has nothing but the prompt, so it gets its own ramp and a
+   much wider growth range: one sentence on a wall (see js/fit.js). */
+.scene.big-prompt .scene-prompt { font-size: min(4em, 30vh); }
+.scene.big-prompt .scene-prompt.long { font-size: min(2.4em, 18vh); max-width: 44ch; }
+
+/* open_text `answering`: no options to show and the typed answers must not be
+   shown either (that would leak the room's guesses), so the region carries the
+   count itself - big enough to read from the back - plus one anonymous tile per
+   answer landing, which is what makes the wait a moment instead of a void. */
+.open-wait { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(10px, 2vh, 28px); width: 100%; }
+.open-wait .tally {
+  font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums;
+  font-size: min(3.2em, 22vh); color: var(--stage-accent);
+}
+.open-wait .tiles {
+  display: flex; flex-wrap: wrap; gap: clamp(6px, 1vh, 14px); justify-content: center;
+  align-content: center; overflow: hidden; min-height: 0;
+}
+.open-wait .tile {
+  width: 2.2em; height: 2.2em;
+  display: grid; place-items: center; border-radius: 18px;
+  background: rgba(255, 255, 255, 0.12); border: 1px solid var(--stage-line);
+  font-size: min(1em, 4.6vh);
+  animation: chip-pop 0.4s cubic-bezier(0.2, 1.3, 0.4, 1) backwards;
+}
+@media (prefers-color-scheme: light) { .open-wait .tile { background: rgba(27, 11, 51, 0.08); } }
+
+/* ---- measuring mode (js/fit.js) ----------------------------------------
+   The scene is laid out at its natural height so its real appetite can be
+   read off `scrollHeight`; the flexible children stop absorbing slack (which
+   would hide any overflow) and the one legitimately scrollable child keeps a
+   floor instead of expanding to its full content. Applied and removed inside a
+   single task: the browser never paints it. */
+/* Transitions off while measuring. The `prefers-reduced-motion` block in
+   app.css sets `transition-duration: 0.001s !important` on `*`, and the default
+   `transition-property` is `all` - so with reduced motion on, the scale we write
+   here *animates*, `getComputedStyle` keeps returning the pre-transition size
+   for a frame, and the search concluded that a 4067px scene fitted in 851px. */
+.stage-center.stage-measuring .scene,
+.stage-center.stage-measuring .scene * { transition: none !important; animation: none !important; }
+/* Transforms off too, and for the same reason: they are decoration, not ink.
+   `.opt.is-correct` grows the correct option by 3.5%, which on a full-width
+   option grid (a two-option question, or any question under 900px where the
+   grid is single-column) overhangs the region by ~21px. That overhang lands in
+   `scrollWidth`, does not shrink when the type does, and so failed the width
+   test at *every* candidate scale - pinning every reveal with a full-width
+   correct option at the 0.55 floor (14 px option labels at 720p). It never
+   showed up under `prefers-reduced-motion`, which zeroes that transform. */
+.stage-center.stage-measuring .scene * { transform: none !important; }
+.stage-center.stage-measuring .scene { height: auto !important; justify-content: flex-start !important; }
+.stage-center.stage-measuring .scene > * { flex: 0 0 auto !important; }
+.stage-center.stage-measuring .grade-list { height: 5em !important; min-height: 5em !important; overflow: hidden !important; }
+/* Same contract for the two other children that clip on purpose: they reserve a
+   floor during the measurement and take whatever the region has left over. */
+.stage-center.stage-measuring .roster,
+.stage-center.stage-measuring .open-wait .tiles { height: 4em !important; overflow: hidden !important; }
+/* The finale is a row: the measuring pass must not flatten its two columns into
+   a stack (that would report a height nothing on screen ever has). */
+.stage-center.stage-measuring .scene.finale > * { flex: 1 1 0 !important; }
+.stage-center.stage-measuring .scene.finale.solo > * { flex: 0 0 auto !important; }
+
+@media (max-width: 900px) {
+  .lobby-grid { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  .stage-opts { grid-template-columns: minmax(0, 1fr); }
+  .keys li { grid-template-columns: 1fr; gap: 2px; }
+}
+
+@keyframes chip-pop { from { transform: scale(0.6) translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .roster-chip, .stage-opts .opt, .stage-lb li, .open-wait .tile { animation: none !important; opacity: 1 !important; transform: none !important; }
+  /* The share strip inside a grading row grows the same way the option strip
+     does, so it needs the same exemption. */
+  .stage .grade-list .group-row .share { animation: none !important; }
+  /* The distribution strip inside a revealed option was the one animation the
+     reduced-motion block missed: it kept growing on every reveal. */
+  .stage-opts .opt .fill { animation: none !important; }
+  .ring.danger .run { animation: none !important; }
+  .ring .run, .progress > i { transition: none !important; }
+  .stage-opts .opt.is-correct { transform: none; }
+}

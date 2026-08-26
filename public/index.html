@@ -1,0 +1,63 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title data-i18n="app.name">LivePoll</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="/css/app.css" />
+
+<!-- Atmosphere: aurora + grain + vignette, behind everything (z-index -1). -->
+<div class="atmos" aria-hidden="true">
+  <span class="aurora a"></span><span class="aurora b"></span><span class="aurora c"></span>
+  <span class="grain"></span>
+</div>
+
+<header class="topbar">
+  <a class="brand" href="/"><span class="dot" aria-hidden="true"></span><span data-i18n="app.name">LivePoll</span></a>
+  <span class="spacer"></span>
+  <div data-lang-switch></div>
+  <button id="mute" class="btn btn-icon" type="button" aria-pressed="false">🔊</button>
+</header>
+
+<main class="wrap">
+  <header class="hero">
+    <span class="eyebrow" data-i18n="index.eyebrow"></span>
+    <h1 data-i18n="index.title">Play, learn, compete</h1>
+    <p class="lead" data-i18n="index.subtitle"></p>
+
+    <div class="cta-cards">
+      <section class="cta-card">
+        <span class="ico" aria-hidden="true">🎬</span>
+        <h2 data-i18n="index.create">Create room</h2>
+        <p data-i18n="index.create_desc"></p>
+        <div class="cta-actions">
+          <a class="btn btn-lg btn-block" href="/host.html" data-i18n="index.create">Create room</a>
+          <a class="btn btn-secondary btn-block" href="/host.html#reopen" data-i18n="index.reopen"></a>
+        </div>
+      </section>
+
+      <section class="cta-card">
+        <span class="ico" aria-hidden="true">📱</span>
+        <h2 data-i18n="index.join">Join room</h2>
+        <p data-i18n="index.join_desc"></p>
+        <form id="join-form" novalidate>
+          <div class="field">
+            <label for="code" data-i18n="index.code_label">Room code</label>
+            <input id="code" name="code" class="input code" type="text" inputmode="latin"
+                   autocomplete="off" autocapitalize="characters" maxlength="7" required
+                   data-i18n-placeholder="index.code_placeholder" data-i18n-aria-label="index.code_label" />
+          </div>
+          <div class="field">
+            <label for="nickname" data-i18n="index.nickname_label">Nickname</label>
+            <input id="nickname" name="nickname" class="input" type="text" maxlength="20" autocomplete="nickname"
+                   data-i18n-placeholder="index.nickname_placeholder" data-i18n-aria-label="index.nickname_label" />
+          </div>
+          <button class="btn btn-lg btn-block" type="submit" data-i18n="index.enter">Enter</button>
+        </form>
+      </section>
+    </div>
+  </header>
+</main>
+
+<div id="fx-layer" aria-hidden="true"></div>
+<script type="module" src="/js/page-index.js"></script>

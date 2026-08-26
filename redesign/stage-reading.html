@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Telão · Leitura — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="stage">
+  <header class="stage-top">
+    <span class="room-code">QDSKCH</span>
+    <span class="qr-mini" data-qr="QDSKCH"></span>
+    <div class="stage-meta">
+      <span class="chip hide-sm">📦 Bloco 1 · Aquecimento</span>
+      <span class="chip">Pergunta <b>4</b> de <b>8</b></span>
+      <span class="chip"><span class="dot"></span> <b>9</b>&nbsp;na sala</span>
+    </div>
+  </header>
+
+  <!-- Estado READING: só o enunciado. As opções nem existem no DOM. -->
+  <section class="scene" data-fit-box aria-live="polite">
+    <div class="reading-wrap">
+      <span class="eyebrow">Escolha única · 20 s quando liberar</span>
+      <h1 class="question">Qual planeta é conhecido como planeta vermelho?</h1>
+      <span class="read-hint">
+        <span class="wave">🗣️</span> Leia em voz alta — as opções entram a seguir
+      </span>
+    </div>
+  </section>
+
+  <footer class="stage-bottom">
+    <div class="progress"><i style="width:44%"></i></div>
+    <div class="stage-actions">
+      <button class="btn btn-icon" data-back data-href="stage-lobby.html" title="Voltar (←)" aria-label="Voltar">←</button>
+      <button class="btn btn-primary btn-lg" data-primary id="go">
+        Mostrar opções <span class="kbd">Espaço</span>
+      </button>
+      <button class="btn btn-icon" data-fullscreen title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
+      <button class="btn btn-icon" data-sfx-toggle title="Som (M)" aria-label="Som">🔊</button>
+      <a class="btn btn-icon" href="stage-shortcuts.html" data-go title="Atalhos (?)" aria-label="Atalhos">⌨</a>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>
+LP.stageKeys({ shortcuts: 'stage-shortcuts.html' });
+document.getElementById('go').addEventListener('click', e => {
+  e.stopImmediatePropagation();
+  LP.countdown(() => LP.go('stage-answering.html'));
+}, true);
+</script>
+</body>
+</html>

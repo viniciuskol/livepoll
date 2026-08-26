@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Criar sala — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body class="scrollable">
+
+<div class="page">
+  <nav class="nav">
+    <a class="logo" href="index.html" data-go><span class="mark"></span> LivePoll</a>
+    <div class="right">
+      <button class="btn btn-icon" data-sfx-toggle aria-label="Som">🔊</button>
+    </div>
+  </nav>
+
+  <div class="wizard">
+    <div class="steps" aria-label="Progresso">
+      <span class="step done"><span class="b">✓</span> Modelo</span>
+      <span class="step-line"></span>
+      <span class="step done"><span class="b">✓</span> Perguntas</span>
+      <span class="step-line"></span>
+      <span class="step now"><span class="b">3</span> Senha</span>
+      <span class="step-line"></span>
+      <span class="step"><span class="b">4</span> Sala</span>
+    </div>
+
+    <h1 style="margin:0;font-size:clamp(28px,4vw,46px);font-weight:900;letter-spacing:-.03em;text-align:center">
+      Monte sua partida
+    </h1>
+
+    <section class="card">
+      <h2>1 · Baixe o modelo</h2>
+      <p class="hint">A planilha vem no idioma da interface, com exemplos prontos.
+        Cabeçalhos funcionam em português, inglês e espanhol.</p>
+      <div class="row gap-m" style="flex-wrap:wrap">
+        <button class="btn">📄 Baixar .csv</button>
+        <button class="btn">📊 Baixar .xlsx</button>
+        <span class="tag">block · type · question · option1–6 · correct · time_limit · points</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2 · Envie suas perguntas</h2>
+      <p class="hint">Nada sai do seu navegador antes de você criar a sala.</p>
+      <button class="drop">
+        <div class="ico">📥</div>
+        <div style="font-weight:850;font-size:17px">Arraste a planilha ou clique para escolher</div>
+        <div style="color:var(--ink-soft);font-size:14px;margin-top:6px">.csv ou .xlsx · até 200 perguntas</div>
+      </button>
+
+      <div class="ok-banner">✅ Planilha válida — <b>8 perguntas</b> em <b>2 blocos</b></div>
+
+      <div class="table-wrap">
+        <table class="preview">
+          <thead>
+            <tr><th>Bloco</th><th>Tipo</th><th>Pergunta</th><th>Correta</th><th>Tempo</th><th>Pontos</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Aquecimento</td><td><span class="tag">escolha única</span></td><td>Qual planeta é conhecido como planeta vermelho?</td><td>Marte</td><td>20s</td><td>1000</td></tr>
+            <tr><td>Aquecimento</td><td><span class="tag">V/F</span></td><td>A Lua é um satélite natural da Terra.</td><td>Verdadeiro</td><td>15s</td><td>800</td></tr>
+            <tr><td>Aquecimento</td><td><span class="tag">múltipla</span></td><td>Quais são gigantes gasosos?</td><td>Júpiter, Saturno</td><td>25s</td><td>1200</td></tr>
+            <tr><td>Aprofundando</td><td><span class="tag">aberta</span></td><td>Cite uma missão que pousou em Marte.</td><td>Perseverance…</td><td>30s</td><td>1500</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>3 · Proteja o painel</h2>
+      <p class="hint">Essa senha reabre o telão se a aba cair no meio da apresentação.</p>
+      <div class="field">
+        <label for="pw">Senha da sala</label>
+        <input class="input" id="pw" type="password" value="aulao2026" autocomplete="new-password">
+      </div>
+    </section>
+
+    <div class="row gap-m" style="justify-content:flex-end;flex-wrap:wrap">
+      <a class="btn btn-ghost" href="index.html" data-go>Cancelar</a>
+      <button class="btn btn-primary btn-lg" data-href="stage-lobby.html">
+        Criar sala e abrir o telão <span aria-hidden="true">→</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/neon.js"></script>
+</body>
+</html>

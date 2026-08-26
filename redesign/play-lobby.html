@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Você está dentro — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="phone">
+  <header class="play-top">
+    <span class="who"><span class="av">🦊</span> Ana</span>
+    <div class="metrics">
+      <span class="metric">QDSKCH</span>
+      <button class="btn btn-icon" data-sfx-toggle aria-label="Som">🔊</button>
+    </div>
+  </header>
+
+  <div class="play-body">
+    <div class="fullstate">
+      <div class="big">🦊</div>
+      <div class="head">Você está dentro!</div>
+      <p class="sub">Deixe o celular na mão e olhe para o telão.
+        A partida começa quando o apresentador liberar.</p>
+      <div class="badges">
+        <span class="badge">🎟️ 9º a entrar</span>
+        <span class="badge">📦 8 perguntas</span>
+      </div>
+      <div class="waiting" style="margin-top:8px">
+        <span class="orb"></span><span class="orb"></span><span class="orb"></span>
+        <span>Esperando o apresentador</span>
+      </div>
+      <button class="btn btn-primary" data-href="play-reading.html" style="margin-top:10px">
+        Simular início <span aria-hidden="true">→</span>
+      </button>
+    </div>
+  </div>
+
+  <footer class="play-foot">
+    <div class="reactions" role="group" aria-label="Reações">
+      <button data-react="👏" aria-label="Palmas">👏</button>
+      <button data-react="🔥" aria-label="Fogo">🔥</button>
+      <button data-react="😂" aria-label="Risada">😂</button>
+      <button data-react="😮" aria-label="Surpresa">😮</button>
+      <button data-react="❤️" aria-label="Coração">❤️</button>
+      <button data-react="🎉" aria-label="Festa">🎉</button>
+      <button data-react="🤯" aria-label="Mente explodindo">🤯</button>
+      <button data-react="👍" aria-label="Positivo">👍</button>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+<script>LP.say('Você entrou na sala. Aguardando o apresentador começar.');
+LP.SFX.join(); LP.buzz([15, 60, 25]);</script>
+</body>
+</html>

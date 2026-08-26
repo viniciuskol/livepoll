@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Olhe para o telão — LivePoll</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/neon.css">
+</head>
+<body>
+
+<main class="phone">
+  <header class="play-top">
+    <span class="who"><span class="av">🦊</span> Ana</span>
+    <div class="metrics">
+      <span class="metric pts">⭐ 2.847</span>
+      <span class="metric">1º</span>
+      <button class="btn btn-icon" data-sfx-toggle aria-label="Som">🔊</button>
+    </div>
+  </header>
+
+  <!-- Anti-cheating: sem enunciado, sem opções. Os dados nem chegam aqui. -->
+  <div class="play-body">
+    <div class="fullstate">
+      <div class="big" style="animation:wave 2.2s ease-in-out infinite">👀</div>
+      <div class="head">Olhe para o telão</div>
+      <p class="sub">O apresentador está lendo a pergunta.
+        Suas opções aparecem aqui no instante em que ele liberar.</p>
+      <div class="badges">
+        <span class="badge">📦 Bloco 1 · Aquecimento</span>
+        <span class="badge">Pergunta 4 de 8</span>
+      </div>
+      <div class="waiting" style="margin-top:6px">
+        <span class="orb"></span><span class="orb"></span><span class="orb"></span>
+        <span>Prepare o polegar</span>
+      </div>
+      <button class="btn btn-primary" data-href="play-answering.html" style="margin-top:10px">
+        Simular liberação <span aria-hidden="true">→</span>
+      </button>
+    </div>
+  </div>
+
+  <footer class="play-foot">
+    <div class="reactions" role="group" aria-label="Reações">
+      <button data-react="👏" aria-label="Palmas">👏</button>
+      <button data-react="🔥" aria-label="Fogo">🔥</button>
+      <button data-react="😂" aria-label="Risada">😂</button>
+      <button data-react="😮" aria-label="Surpresa">😮</button>
+      <button data-react="❤️" aria-label="Coração">❤️</button>
+      <button data-react="🎉" aria-label="Festa">🎉</button>
+      <button data-react="🤯" aria-label="Mente explodindo">🤯</button>
+      <button data-react="👍" aria-label="Positivo">👍</button>
+    </div>
+  </footer>
+</main>
+
+<script src="assets/neon.js"></script>
+</body>
+</html>
