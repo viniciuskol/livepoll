@@ -106,6 +106,9 @@
   "play": {
     "look_at_stage": "Olhe para o telão",
     "look_hint": "O apresentador está lendo a pergunta",
+    "waiting_host": "Esperando o apresentador",
+    "next_coming": "Próxima pergunta chegando...",
+    "answer_sent": "Resposta enviada: {answer}",
     "get_ready": "Prepare-se...",
     "locked_in": "Resposta registrada!",
     "waiting_others": "{count} de {total} responderam",

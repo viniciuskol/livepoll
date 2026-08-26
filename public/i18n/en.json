@@ -106,6 +106,9 @@
   "play": {
     "look_at_stage": "Look at the stage",
     "look_hint": "The presenter is reading the question",
+    "waiting_host": "Waiting for the presenter",
+    "next_coming": "Next question coming up...",
+    "answer_sent": "Answer sent: {answer}",
     "get_ready": "Get ready...",
     "locked_in": "Answer locked in!",
     "waiting_others": "{count} of {total} answered",

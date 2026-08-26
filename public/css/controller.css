@@ -1,7 +1,17 @@
-/* LivePoll controller: the player screen as a game pad (SPEC-UX).
-   Laid out for 390x844 first - identity bar, one scene, reactions - and never
-   scrolls while a question is open. */
+/* LivePoll controller: the player screen as a game pad (SPEC-UX), restyled to
+   the Neon Arena direction (redesign/assets/neon.css section 11 for the phone,
+   section 15 for the framed tablet/desktop console).
 
+   Laid out for 390x844 first - identity bar, one scene, reactions - and never
+   scrolls while a question is open. Tokens all come from app.css; nothing is
+   redefined here.
+
+   Section order is load-bearing, exactly as in neon.css: the phone base comes
+   first and the framed console (>=700px) comes last so it wins the cascade. */
+
+/* ---- shell --------------------------------------------------------------
+   `position: fixed` + `inset: 0` is what makes `.ctrl` the stacking context
+   that keeps #confetti / #fx-layer from painting over the identity bar. */
 .ctrl {
   position: fixed; inset: 0;
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
@@ -9,41 +19,64 @@
      min-content in the whole shell - the eight no-wrap reaction buttons - and
      pushes the option grid past the right edge of a 390px screen. */
   grid-template-columns: minmax(0, 1fr);
+  width: min(100%, 560px); margin-inline: auto;
   overflow: hidden;
 }
+.ctrl > * { min-width: 0; }
 .ctrl.hidden { display: none !important; }
 body.ctrl-on { overflow: hidden; }
 
-/* ---- identity bar -------------------------------------------------------
+/* ---- identity bar (the prototype's .play-top) ---------------------------
    The nickname, avatar, score and rank live in a single 48px line. The old
    app topbar plus the #me-pill/#score-pill pair grew the header to 103px on a
    390px screen and pushed the options below the fold. */
 .ctrl-bar {
   display: flex; align-items: center; gap: 8px;
-  min-height: 48px; padding: 6px 12px calc(6px) 12px;
-  background: var(--card-solid); border-bottom: 1px solid var(--line);
+  min-height: 48px;
+  padding: calc(env(safe-area-inset-top) + 8px) 12px 8px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(10, 4, 30, 0.6);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   font-size: 0.9rem;
 }
-.ctrl-me { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ctrl-me { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 800; }
 .ctrl-me b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34vw; }
-.ctrl-avatar { font-size: 1.35rem; line-height: 1; }
+.ctrl-avatar { font-size: 1.5rem; line-height: 1; flex: none; }
+/* .metric in the prototype: a glass pill that never wraps and never shrinks. */
 .ctrl-stat {
-  padding: 4px 10px; border-radius: 999px; background: var(--elev-strong);
-  border: 1px solid var(--line); font-weight: 800; font-variant-numeric: tabular-nums;
-  font-size: 0.82rem; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  padding: 6px 11px; border-radius: var(--r-pill);
+  background: var(--glass); border: 1px solid var(--line);
+  font-weight: 800; font-size: 0.82rem;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* The score is the one number the player is playing for: it gets the pts
+   treatment from the prototype instead of another neutral pill. */
+#p-score {
+  background: linear-gradient(100deg, rgba(139, 92, 255, 0.35), rgba(255, 63, 180, 0.22));
+  border-color: rgba(255, 63, 180, 0.4);
 }
 .ctrl-icon {
-  min-width: 44px; min-height: 44px; border-radius: 12px; cursor: pointer;
-  background: transparent; color: var(--text); border: 1px solid var(--line); font-size: 1rem;
+  min-width: 44px; min-height: 44px; border-radius: 14px; cursor: pointer; flex: none;
+  background: var(--glass-2); color: var(--ink); border: 1px solid var(--line);
+  font-size: 1rem;
+  transition: transform 0.18s var(--e-back), background 0.2s;
 }
+.ctrl-icon:active { transform: scale(0.9); }
 
-/* ---- scene -------------------------------------------------------------- */
+/* ---- scene (the prototype's .play-body) --------------------------------- */
 .ctrl-center {
-  min-height: 0; padding: 12px; display: grid; align-content: center; justify-items: center;
+  /* `safe center`: a scene taller than the region (a crowded leaderboard) is
+     centred right up to the point where centring would clip its top, then
+     falls back to start alignment instead of hiding the first row. */
+  min-height: 0; padding: 12px; display: grid; align-content: safe center; justify-items: center;
   /* An `auto` column would size itself to the widest option and push the grid
      past the viewport; minmax(0,1fr) keeps everything inside 390px. */
   grid-template-columns: minmax(0, 1fr);
   gap: 12px; text-align: center;
+  /* Reading-type scenes (leaderboard, summary) may scroll; the timed ones are
+     built to fit, so this never engages while a question is open. */
+  overflow-y: auto; overscroll-behavior: contain;
 }
 .ctrl-center.top { align-content: stretch; }
 /* This is the one surface where the player's hands are: the option grid takes
@@ -53,91 +86,297 @@ body.ctrl-on { overflow: hidden; }
 .ctrl-center.top > .ctrl-scene { height: 100%; }
 .ctrl-scene { display: flex; flex-direction: column; gap: 10px; width: 100%; min-height: 0; }
 .ctrl-scene > .ctrl-opts { flex: 1 1 auto; min-height: 0; }
-.ctrl-title { margin: 0; font-size: clamp(1.3rem, 6vw, 1.9rem); font-weight: 900; line-height: 1.15; }
-.ctrl-note { margin: 0; color: var(--muted); font-size: 0.95rem; }
-.ctrl-big { font-size: clamp(3rem, 22vw, 6rem); line-height: 1; }
-.ctrl-prompt { margin: 0; font-size: clamp(1rem, 4.4vw, 1.3rem); font-weight: 700; line-height: 1.25; }
+
+/* Full-screen states: lobby, reading, block intro, locked in, reveal.
+   The prototype calls this `.fullstate`; the app's scene roots are `.watch`
+   and `.sent-card`, and JS names those, so the treatment lands on them. */
+.watch, .sent-card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: clamp(8px, 1.6vh, 14px); width: 100%; min-height: 0; padding: 4px;
+}
+.ctrl-title {
+  margin: 0; font-family: var(--font-display);
+  font-size: clamp(24px, 7vw, 36px); font-weight: 900; line-height: 1.15;
+}
+.ctrl-title.ok { color: var(--ok); }
+.ctrl-title.bad { color: var(--bad); }
+.ctrl-note {
+  margin: 0; color: var(--ink-soft);
+  font-size: clamp(14px, 4vw, 18px); line-height: 1.5; max-width: 32ch;
+}
+.ctrl-big {
+  font-size: clamp(56px, 17vw, 92px); line-height: 1;
+  animation: pop 0.5s var(--e-back) both;
+}
+.ctrl-prompt {
+  margin: 0; color: var(--ink);
+  font-size: clamp(16px, 4.6vw, 21px); font-weight: 750; line-height: 1.3;
+}
 
 /* expectant pulse while the presenter reads the question out loud */
-.watch { display: grid; gap: 10px; justify-items: center; }
-.watch .eyes { font-size: clamp(3.4rem, 24vw, 6rem); line-height: 1; animation: watch-pulse 1.8s ease-in-out infinite; }
+.watch .eyes { font-size: clamp(56px, 17vw, 92px); line-height: 1; animation: watch-pulse 1.8s ease-in-out infinite; }
 
-/* option grid: the targets absorb the slack of the scene, 72px is the floor */
-.ctrl-opts { display: grid; gap: 10px; width: 100%; grid-auto-rows: minmax(72px, 1fr); }
-.ctrl-opts .opt { min-height: 72px; font-size: 1.15rem; }
-.ctrl-opts .opt .shape { width: 1.7em; height: 1.7em; }
-.ctrl-ring { display: flex; align-items: center; justify-content: center; gap: 12px; }
-.ctrl-ring .ring { width: 62px; }
-.ctrl-ring .count { font-weight: 800; font-size: 0.95rem; color: var(--muted); }
+/* the three orbs that say "something is coming" without a fake progress bar */
+.ctrl-wait {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: var(--ink-soft); font-weight: 700; font-size: 0.9rem;
+}
+.ctrl-wait .orb {
+  width: 10px; height: 10px; border-radius: 50%; flex: none;
+  background: var(--brand-3); box-shadow: 0 0 14px var(--brand-3);
+  animation: orb 1.2s infinite;
+}
+.ctrl-wait .orb:nth-child(2) { animation-delay: 0.15s; }
+.ctrl-wait .orb:nth-child(3) { animation-delay: 0.3s; }
 
-/* answered confirmation */
-.sent-card { display: grid; gap: 10px; justify-items: center; }
-.sent-shape { width: 74px; height: 74px; background: currentColor; }
-.sent-wrap { display: grid; place-items: center; width: 96px; height: 96px; border-radius: 26px; }
+/* ---- option grid --------------------------------------------------------
+   `minmax(56px, 1fr)` on auto rows: the targets absorb the slack of the scene
+   and 2 to 6 options fit with no ghost row. */
+.ctrl-opts { display: grid; gap: 10px; width: 100%; grid-auto-rows: minmax(56px, 1fr); }
+.ctrl-opts .opt {
+  min-height: 56px; border-radius: 20px; padding: 12px 16px;
+  font-size: clamp(16px, 4.2vw, 23px);
+}
+.ctrl-opts .opt .shape { width: 1.5em; height: 1.5em; }
+/* A dead option after the pick: still readable (the player wants to see what
+   else was on offer) but out of the tab cycle - see lockOptions(). */
+.ctrl-opts .opt[aria-disabled="true"] { cursor: default; }
 
-/* reveal */
-.points { font-size: clamp(2.4rem, 15vw, 4rem); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.ctrl-ring { display: flex; align-items: center; justify-content: center; gap: 12px; flex: none; }
+.ctrl-ring .ring { width: 58px; }
+.ctrl-ring .count { font-weight: 800; font-size: 0.9rem; color: var(--ink-soft); }
+.ctrl-hint {
+  margin: 0; flex: none; color: var(--ink-dim);
+  font-size: 12px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+}
+
+/* ---- answered confirmation ---------------------------------------------- */
+.sent-wrap {
+  display: grid; place-items: center; width: 96px; height: 96px; border-radius: 26px;
+  cursor: default; flex: none;
+}
+.sent-shape { width: 60px; height: 60px; background: rgba(11, 6, 32, 0.85); }
+
+/* ---- reveal -------------------------------------------------------------- */
+.points {
+  font-size: clamp(40px, 12vw, 62px); font-weight: 900; line-height: 1;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  background: linear-gradient(100deg, var(--ok), var(--brand-3));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: pop 0.5s 0.1s var(--e-back) both;
+}
 .badges { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .badge {
-  display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px;
-  background: var(--elev-strong); border: 1px solid var(--line); font-weight: 800; font-size: 0.9rem;
+  display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px;
+  border-radius: var(--r-pill); background: var(--glass); border: 1px solid var(--line);
+  font-weight: 800; font-size: 0.88rem;
+  animation: fade-up 0.5s 0.3s var(--e-out) both;
 }
-.badge.up { color: var(--up); border-color: currentColor; }
-.badge.down { color: var(--down); border-color: currentColor; }
-.badge.fire { color: var(--accent); border-color: currentColor; }
+.badge.up { color: var(--up); border-color: rgba(61, 220, 132, 0.5); background: rgba(61, 220, 132, 0.1); }
+.badge.down { color: var(--down); border-color: rgba(255, 77, 109, 0.5); background: rgba(255, 77, 109, 0.1); }
+.badge.fire { color: var(--warn); border-color: rgba(255, 176, 32, 0.5); background: rgba(255, 176, 32, 0.1); }
 /* The first correct answer of a run used to show "Position held" as its
    strongest line - the weakest sentence in the game at its best moment. */
-.badge.spark { color: var(--ok); border-color: currentColor; font-size: 1rem; }
+.badge.spark { color: var(--ok); border-color: rgba(61, 220, 132, 0.5); background: rgba(61, 220, 132, 0.1); font-size: 0.95rem; }
 
-/* full-screen right/wrong flash */
-.flash { position: fixed; inset: 0; z-index: 50; pointer-events: none; opacity: 0; }
-.flash.ok { background: radial-gradient(circle, rgba(46, 194, 126, 0.9), rgba(46, 194, 126, 0.35)); }
-.flash.bad { background: radial-gradient(circle, rgba(255, 92, 122, 0.9), rgba(255, 92, 122, 0.35)); }
-.flash.run { animation: flash-out 0.75s ease-out forwards; }
-
-/* leaderboard with the player's own row anchored */
+/* ---- leaderboard with the player's own row anchored ---------------------- */
 .ctrl-lb { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; width: 100%; }
 .ctrl-lb li {
-  display: grid; grid-template-columns: 2.2em 1.5em 1fr auto; align-items: center; gap: 8px;
-  padding: 10px 12px; border-radius: 14px; background: var(--elev); border: 1px solid var(--line);
-  font-weight: 700; text-align: left;
+  position: relative; overflow: hidden;
+  display: grid; grid-template-columns: 1.8em 1.4em 1fr auto; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: var(--r-l);
+  background: rgba(0, 0, 0, 0.32); border: 1px solid var(--line);
+  font-weight: 800; font-size: 0.98rem; text-align: left;
+  animation: slide-in 0.55s var(--e-out) both;
 }
-.ctrl-lb li.me { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
-.ctrl-lb .lb-rank { color: var(--rank-ink); font-weight: 900; }
+.ctrl-lb li:nth-child(1) { animation-delay: 0.05s; }
+.ctrl-lb li:nth-child(2) { animation-delay: 0.13s; }
+.ctrl-lb li:nth-child(3) { animation-delay: 0.21s; }
+.ctrl-lb li:nth-child(4) { animation-delay: 0.29s; }
+.ctrl-lb li:nth-child(5) { animation-delay: 0.37s; }
+.ctrl-lb li.top1 {
+  background: linear-gradient(100deg, rgba(255, 176, 32, 0.22), var(--glass));
+  border-color: rgba(255, 176, 32, 0.5);
+}
+/* Cyan, not the amber of first place: "this row is you" and "this row is
+   winning" have to stay two different signals. */
+.ctrl-lb li.me { border-color: var(--brand-3); box-shadow: 0 0 0 2px rgba(34, 230, 255, 0.35); }
+.ctrl-lb .lb-rank { text-align: center; }
+.ctrl-lb li.top1 .lb-rank { color: var(--warn); }
 .ctrl-lb .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* personal end-of-game card */
-.summary { display: grid; gap: 10px; width: 100%; }
-.summary-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 12px 14px; border-radius: 14px; background: var(--elev); border: 1px solid var(--line);
+/* ---- personal end-of-game card ------------------------------------------ */
+.summary { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
+.sum-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; max-width: 400px; }
+.sum-stat {
+  padding: 12px 10px; border-radius: var(--r-m); text-align: center;
+  background: var(--glass); border: 1px solid var(--line);
+  animation: fade-up 0.6s var(--e-out) both;
 }
-.summary-row b { font-size: 1.2rem; }
+.sum-stat .v { font-size: clamp(22px, 7vw, 34px); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.sum-stat .k {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-dim); margin-top: 0.6em; line-height: 1.3;
+}
 
-/* ---- reactions ---------------------------------------------------------- */
+/* ---- reactions (the prototype's .play-foot) -----------------------------
+   Eight targets on one line at 390px and 375px. `flex: 1 0 44px` is the
+   contract: they may grow, never shrink below the 44px touch floor (D6); if a
+   screen is genuinely too narrow (320px) the strip scrolls rather than
+   shrinking the targets. */
 .ctrl-foot {
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-  background: var(--card-solid); border-top: 1px solid var(--line);
+  padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: rgba(10, 4, 30, 0.6);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
 }
-.ctrl-foot .reactions { justify-content: center; gap: 4px; flex-wrap: nowrap; overflow-x: auto; min-width: 0; }
-.ctrl-foot .reactions button { min-height: 46px; min-width: 40px; flex: 1 1 40px; max-width: 60px; font-size: 1.3rem; }
+.ctrl-foot .reactions {
+  justify-content: center; gap: 6px; flex-wrap: nowrap;
+  overflow-x: auto; scrollbar-width: none; min-width: 0;
+}
+.ctrl-foot .reactions::-webkit-scrollbar { display: none; }
+.ctrl-foot .reactions button {
+  flex: 1 0 44px; min-width: 44px; min-height: 44px; max-width: 56px;
+  aspect-ratio: auto; height: 46px; font-size: 1.3rem;
+}
 
-/* Short phones: shrink the chrome instead of scrolling the options away. */
+/* ---- short phones: shrink the chrome instead of scrolling the options away */
 @media (max-height: 700px) {
-  .ctrl-opts { grid-auto-rows: minmax(60px, 1fr); }
-  .ctrl-opts .opt { min-height: 60px; font-size: 1.05rem; }
-  .ctrl-foot .reactions button { min-height: 44px; min-width: 44px; }
+  .ctrl-center { padding: 10px; gap: 10px; }
+  .ctrl-opts { gap: 8px; }
+  .ctrl-big, .watch .eyes { font-size: clamp(44px, 13vw, 68px); }
+  .ctrl-title { font-size: clamp(21px, 6vw, 30px); }
+  .ctrl-ring .ring { width: 52px; }
 }
-/* Landscape phone: options in two columns so they still fit above the fold. */
+
+/* ============================================================
+   Player on tablet and desktop. Last on purpose, exactly like neon.css
+   section 15: these rules have to beat the phone base above.
+   ============================================================ */
+@media (min-width: 700px) {
+  .ctrl {
+    inset: 0; margin: auto;
+    width: min(92vw, 780px);
+    height: min(calc(100dvh - 48px), 940px);
+    border: 2px solid var(--line-strong); border-radius: var(--r-xl);
+    box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6);
+    background: linear-gradient(180deg, rgba(13, 7, 38, 0.55), rgba(7, 3, 26, 0.75));
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  }
+  .ctrl-bar { padding: 16px 20px; border-radius: var(--r-xl) var(--r-xl) 0 0; font-size: 1rem; }
+  .ctrl-avatar { font-size: 1.85rem; }
+  .ctrl-stat { font-size: 0.95rem; padding: 8px 14px; }
+  .ctrl-center { padding: 18px; gap: 14px; }
+  .ctrl-foot { padding: 12px 16px 14px; border-radius: 0 0 var(--r-xl) var(--r-xl); }
+  .ctrl-foot .reactions { gap: 10px; }
+  .ctrl-foot .reactions button { max-width: 60px; height: 54px; font-size: 1.6rem; }
+  /* The confetti and the floating emoji used to land outside the console.
+     `.ctrl` is `position: fixed`, so absolute children are clipped to it
+     without changing the z-index contract (confetti 40, fx 45). */
+  .ctrl > #confetti, .ctrl > #fx-layer {
+    position: absolute; border-radius: var(--r-xl); overflow: hidden;
+  }
+  /* 4 targets in 2x2 use the width instead of becoming long strips. The row
+     height is capped: a 340px target for one word is dead space, not
+     generosity. The grid centres itself in what is left over. */
+  .ctrl-opts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(88px, clamp(130px, 27vh, 290px));
+    align-content: center;
+  }
+  .ctrl-opts .opt { min-height: 88px; font-size: clamp(20px, 2.4vw, 28px); padding: 16px 20px; }
+  /* A question with 5 or 6 alternatives stays in one column: at 2x3 the
+     targets would be too short for a thumb. */
+  .ctrl-opts.many { grid-template-columns: 1fr; grid-auto-rows: minmax(64px, 1fr); }
+  .ctrl-title { font-size: clamp(34px, 3.6vw, 48px); }
+  .ctrl-note { font-size: clamp(17px, 1.7vw, 21px); max-width: 44ch; }
+  .ctrl-big, .watch .eyes { font-size: clamp(88px, 11vw, 132px); }
+  .points { font-size: clamp(64px, 6.4vw, 92px); }
+  .badge { font-size: 1rem; padding: 10px 18px; }
+  .ctrl-ring .ring { width: 72px; }
+  .ctrl-lb li { font-size: 1.2rem; padding: 14px 20px; }
+  .sum-stats { max-width: 460px; }
+  .sum-stat .v { font-size: clamp(28px, 3vw, 40px); }
+  .sum-stat .k { font-size: 12px; }
+}
+/* Wide desktop: the console does not need the whole screen, but the text does */
+@media (min-width: 1200px) {
+  .ctrl { width: min(88vw, 760px); }
+  .ctrl-me b { max-width: 22vw; }
+  .ctrl-opts .opt { font-size: clamp(22px, 1.9vw, 32px); }
+}
+
+/* ---- landscape phone / short window ------------------------------------
+   Last, after the framed console: a 844x390 phone on its side matches
+   `min-width: 700px` too, and the console's 88px option rows and 77px chrome
+   do not fit in 390px of height. neon.css puts the same override in the same
+   place, for the same reason. The frame is dropped and everything compresses;
+   the "nothing scrolls while answering" rule holds here as well. */
 @media (orientation: landscape) and (max-height: 560px) {
-  .ctrl-opts { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(52px, 1fr); }
-  .ctrl-opts .opt { min-height: 52px; font-size: 1.05rem; }
-  .watch .eyes { font-size: 2.4rem; }
+  .ctrl {
+    position: fixed; inset: 0; margin: 0 auto;
+    width: min(100%, 900px); height: auto;
+    border: 0; border-radius: 0; box-shadow: none;
+    background: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .ctrl > #confetti, .ctrl > #fx-layer { position: fixed; border-radius: 0; }
+  .ctrl-bar { padding: calc(env(safe-area-inset-top) + 4px) 12px 4px; min-height: 40px; font-size: 0.9rem; border-radius: 0; }
+  .ctrl-avatar { font-size: 1.35rem; }
+  .ctrl-stat { font-size: 0.78rem; padding: 4px 10px; }
+  .ctrl-center { padding: 6px 10px; gap: 6px; }
+  .ctrl-foot { padding: 4px 6px calc(4px + env(safe-area-inset-bottom)); border-radius: 0; }
+  .ctrl-foot .reactions { gap: 6px; }
+  .ctrl-foot .reactions button { height: 44px; max-width: 52px; font-size: 1.3rem; }
+  .ctrl-opts { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(52px, 1fr); align-content: stretch; gap: 8px; }
+  /* Five or six options in a 390px-tall window: three columns, so the grid is
+     two rows instead of three and the accessibility prompt still fits above it
+     without the scene scrolling. */
+  .ctrl-opts.many { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ctrl-opts .opt { min-height: 52px; font-size: clamp(15px, 2.6vw, 20px); padding: 8px 12px; }
+  .ctrl-opts .opt .shape { width: 1.3em; height: 1.3em; }
+  .watch, .sent-card { gap: 6px; padding: 2px; }
+  .ctrl-big, .watch .eyes { font-size: clamp(30px, 9vh, 48px); }
+  .ctrl-title { font-size: clamp(18px, 5vh, 26px); }
+  .ctrl-note { font-size: 13px; max-width: 60ch; }
+  .ctrl-prompt { font-size: 15px; }
+  .points { font-size: clamp(26px, 7vh, 42px); }
+  .badge { padding: 5px 11px; font-size: 12px; }
+  .badges { gap: 5px; }
+  .ctrl-ring .ring { width: 44px; }
+  .ctrl-wait { font-size: 12px; }
+  .sent-wrap { width: 64px; height: 64px; border-radius: 18px; }
+  .sent-shape { width: 40px; height: 40px; }
+  .ctrl-lb { grid-template-columns: 1fr 1fr; }
+  .ctrl-lb li { font-size: 0.85rem; padding: 6px 12px; }
+  .summary { gap: 8px; }
+  .sum-stats { grid-template-columns: repeat(3, 1fr); max-width: 560px; }
+  .sum-stat { padding: 6px 8px; }
+  .sum-stat .v { font-size: clamp(16px, 4vh, 24px); }
+  .sum-stat .k { font-size: 9px; margin-top: 0.3em; }
+}
+
+/* ---- very narrow (320-400px, or 200% zoom) ------------------------------ */
+@media (max-width: 400px) {
+  .ctrl-foot { padding-inline: 2px; }
+  .ctrl-foot .reactions { gap: 2px; }
+  .ctrl-center { padding: 10px 8px; }
+  .ctrl-me b { max-width: 28vw; }
+  .ctrl-stat { padding: 5px 8px; font-size: 0.76rem; }
+}
+/* 320x568 with six options - the 1.4.10 reflow case. The targets give up
+   height (never going under the 44px floor) rather than the scene scrolling. */
+@media (max-width: 400px) and (max-height: 620px) {
+  .ctrl-opts { grid-auto-rows: minmax(46px, 1fr); gap: 7px; }
+  .ctrl-opts .opt { min-height: 46px; font-size: 15px; padding: 8px 12px; border-radius: 16px; }
+  .ctrl-opts .opt .shape { width: 1.2em; height: 1.2em; }
+  .ctrl-ring .ring { width: 44px; }
 }
 
 @keyframes watch-pulse { 50% { transform: scale(1.12); opacity: 0.7; } }
-@keyframes flash-out { from { opacity: 0.85; } to { opacity: 0; } }
+@keyframes orb { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-7px); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .watch .eyes { animation: none !important; }
+  .watch .eyes, .ctrl-wait .orb { animation: none !important; }
+  /* flash() already short-circuits on reduced motion; this is the belt to its
+     braces, and it also kills the flash on a mid-flash preference change. */
   .flash { display: none !important; }
 }

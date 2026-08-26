@@ -144,7 +144,10 @@ test('the host runs the stage and two players play a question through the new fl
   await expect(host.locator('#s-codewrap')).toBeHidden();
   for (const { page } of players) {
     await expect(page.locator('.ctrl-title')).toContainText("That's a wrap!");
-    await expect(page.locator('.summary-row')).toHaveCount(3);
+    // The three stacked summary rows are now three stat cells side by side
+    // (Neon Arena phase 3): same three facts, one card that fits 375x667
+    // without scrolling.
+    await expect(page.locator('.sum-stat')).toHaveCount(3);
     await expect(page.locator('#p-center')).toContainText('Correct answers');
     await expect(page.locator('#p-center')).toContainText('Best streak');
     await expect(page.locator('#p-center')).toContainText('Final position');

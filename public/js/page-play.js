@@ -231,11 +231,25 @@ function patchScene(state) {
   if (count) count.textContent = t('play.waiting_others', { count: state.answerCount, total: state.playerCount });
 }
 
+/**
+ * The three pulsing orbs from the redesign: "something is coming" without a
+ * fake progress bar. Decorative dots plus one real, translated sentence.
+ */
+function waitOrbs(text) {
+  return el('div', { class: 'ctrl-wait' }, [
+    el('span', { class: 'orb', 'aria-hidden': 'true' }),
+    el('span', { class: 'orb', 'aria-hidden': 'true' }),
+    el('span', { class: 'orb', 'aria-hidden': 'true' }),
+    el('span', { text }),
+  ]);
+}
+
 function sceneLobby(state) {
   return el('div', { class: 'watch' }, [
     el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: ctx.avatar || '🙂' }),
     el('h1', { class: 'ctrl-title', text: t('play.waiting_title') }),
     el('p', { class: 'ctrl-note', text: t('play.waiting_desc') }),
+    waitOrbs(t('play.waiting_host')),
   ]);
 }
 
@@ -247,7 +261,7 @@ function sceneReading(state) {
     // No prompt and no options here: that is what stops the room from looking
     // the answer up while the presenter is still reading.
     showPrompt ? el('p', { class: 'ctrl-prompt', text: state.question.prompt }) : null,
-    el('p', { class: 'ctrl-note', text: t('play.look_hint') }),
+    waitOrbs(t('play.look_hint')),
   ]);
 }
 
@@ -286,7 +300,11 @@ function sceneAnswering(state) {
   }
 
   const multi = q.type === 'multiple_select';
-  const grid = el('div', { class: 'ctrl-opts', id: 'options' });
+  // `many`: above four options the desktop console drops back to one column -
+  // a 2x3 grid makes every target too short for a thumb. Real spreadsheet
+  // content reaches five and six options; the prototype never had more than four.
+  const optionCount = (q.options || []).length;
+  const grid = el('div', { class: `ctrl-opts${optionCount > 4 ? ' many' : ''}`, id: 'options' });
   (q.options || []).forEach((option, i) => {
     const btn = optionButton(q, option, i, () => {
       if (ctx.submitted || ctx.timeUp) return;
@@ -299,13 +317,17 @@ function sceneAnswering(state) {
       } else {
         ctx.selection = new Set([option.position]);
         paintSelection();
+        // The pick is locked in the same frame it happens: the submit is a
+        // round trip, and until it lands the other options were still live,
+        // still focusable and still silent to a screen reader.
+        lockOptions(grid, btn, optionLabel(q, option), scene);
         submitAnswer();
       }
     });
     grid.appendChild(btn);
   });
   scene.append(
-    el('p', { class: 'ctrl-note', text: multi ? t('play.select_hint_multi') : t('play.select_hint_single') }),
+    el('p', { class: 'ctrl-hint', text: multi ? t('play.select_hint_multi') : t('play.select_hint_single') }),
     grid
   );
   if (multi) scene.appendChild(el('button', { class: 'btn btn-block', id: 'submit-btn', type: 'button', text: t('play.submit'), onclick: () => submitAnswer() }));
@@ -322,6 +344,25 @@ function paintSelection(root) {
     const position = Number(btn.getAttribute('data-position'));
     btn.setAttribute('aria-pressed', String(ctx.selection.has(position)));
   });
+}
+
+/**
+ * Freezes the option grid on the chosen answer: the pick keeps the white ring,
+ * the rest fade (desaturated and *lifted*, never dimmed - the player still
+ * wants to read what else was on offer), get `aria-disabled` and leave the tab
+ * cycle. The choice itself is announced into the polite region (D6).
+ */
+function lockOptions(grid, chosen, label, scene) {
+  if (!grid) return;
+  [...grid.children].forEach((btn) => {
+    if (btn === chosen) { btn.classList.add('picked'); return; }
+    btn.classList.add('faded');
+    btn.setAttribute('aria-disabled', 'true');
+    btn.tabIndex = -1;
+  });
+  if (scene && label) {
+    scene.appendChild(el('p', { class: 'sr-only', role: 'status', text: t('play.answer_sent', { answer: label }) }));
+  }
 }
 
 /** After answering: the chosen shape plus a live counter, never a dead screen. */
@@ -361,11 +402,11 @@ function sceneReveal(state) {
     body.push(el('h1', { class: 'ctrl-title', text: t('play.pending_grade') }));
   } else if (answered.correct) {
     body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '✅' }));
-    body.push(el('h1', { class: 'ctrl-title', text: t('play.correct') }));
+    body.push(el('h1', { class: 'ctrl-title ok', text: t('play.correct') }));
     body.push(el('div', { class: 'points', id: 'p-points', text: '0' }));
   } else {
     body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '❌' }));
-    body.push(el('h1', { class: 'ctrl-title', text: t('play.wrong') }));
+    body.push(el('h1', { class: 'ctrl-title bad', text: t('play.wrong') }));
   }
   const badges = el('div', { class: 'badges' });
   // A correct answer always says something about the run it just started: the
@@ -447,7 +488,7 @@ function sceneLeaderboard(state) {
   const list = el('ol', { class: 'ctrl-lb' });
   if (!rows.length) list.appendChild(el('li', { text: t('lb.empty') }));
   rows.slice(0, 10).forEach((p) => {
-    list.appendChild(el('li', { class: p.id === meId ? 'me' : '' }, [
+    list.appendChild(el('li', { class: `${p.rank === 1 ? 'top1' : ''}${p.id === meId ? ' me' : ''}`.trim() }, [
       el('span', { class: 'lb-rank', text: String(p.rank) }),
       el('span', { 'aria-hidden': 'true', text: p.avatar || '🙂' }),
       el('span', { class: 'name', text: p.id === meId ? `${p.nickname} (${t('lb.you')})` : p.nickname }),
@@ -457,6 +498,7 @@ function sceneLeaderboard(state) {
   const scene = el('div', { class: 'summary' }, [
     el('h1', { class: 'ctrl-title', text: t('lb.title') }),
     list,
+    waitOrbs(t('play.next_coming')),
   ]);
   // Keep the player's own row on screen even in a crowded room.
   requestAnimationFrame(() => {
@@ -474,17 +516,23 @@ function sceneLeaderboard(state) {
 function sceneEnded(state) {
   const me = state.me || {};
   const summary = me.summary || { correct: 0, answered: 0, bestStreak: me.bestStreak || 0, score: me.score || 0 };
-  const row = (labelKey, value) => el('div', { class: 'summary-row' }, [
-    el('span', { text: t(labelKey) }),
-    el('b', { text: String(value) }),
+  // Three stats side by side instead of three stacked rows: the whole card
+  // fits a 375x667 screen without scrolling, and the score keeps the big type
+  // to itself.
+  const stat = (labelKey, value) => el('div', { class: 'sum-stat' }, [
+    el('div', { class: 'v', text: String(value) }),
+    el('div', { class: 'k', text: t(labelKey) }),
   ]);
   return el('div', { class: 'summary' }, [
+    el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: (me.rank || 99) <= 3 ? '🏆' : '🏁' }),
     el('h1', { class: 'ctrl-title', text: t('play.ended_title') }),
-    el('p', { class: 'ctrl-note', text: t('play.summary_title') }),
     el('div', { class: 'points', text: String(summary.score) }),
-    row('play.summary_correct', `${summary.correct}/${state.totalQuestions || summary.answered}`),
-    row('play.summary_streak', summary.bestStreak),
-    row('play.summary_rank', me.rank || '-'),
+    el('p', { class: 'ctrl-note', text: t('play.summary_title') }),
+    el('div', { class: 'sum-stats' }, [
+      stat('play.summary_correct', `${summary.correct}/${state.totalQuestions || summary.answered}`),
+      stat('play.summary_streak', summary.bestStreak),
+      stat('play.summary_rank', me.rank || '-'),
+    ]),
     el('p', { class: 'ctrl-note', text: t('play.ended_desc') }),
   ]);
 }
