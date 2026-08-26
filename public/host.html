@@ -107,10 +107,13 @@
     </div>
     <canvas id="s-qr" class="strip-qr" data-i18n-aria-label="panel.qr_label"></canvas>
     <span class="strip-sep"></span>
+    <!-- Chips, not bare spans (neon.css §5). The text is written by `t()` in
+         renderStrip(), so an item with nothing to say is left empty and CSS
+         hides it with `:empty` - no extra class for the JS to keep in sync. -->
     <div class="strip-meta">
-      <span class="strip-block" id="s-block"></span>
-      <span id="s-qof"></span>
-      <span id="s-players"></span>
+      <span class="chip strip-block" id="s-block"></span>
+      <span class="chip" id="s-qof"></span>
+      <span class="chip" id="s-players"></span>
     </div>
     <!-- Announced to screen readers on every transition (SPEC-UX a11y). -->
     <span id="s-state" class="sr-only" aria-live="polite"></span>

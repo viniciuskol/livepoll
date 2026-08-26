@@ -420,9 +420,29 @@ function patchRoster(root, players, quiet) {
   return changed;
 }
 
+/**
+ * The prompt, in one of five length bands (PORT-PLAN D1).
+ *
+ * The band is *relative*: `.q-xs`...`.q-xl` pick a multiple of the scene unit,
+ * and `fitRegion()` picks the absolute scale by measurement. That is the half
+ * of the prototype's `fitQuestion()` worth keeping - its 10-step shrink loop
+ * and its 70% floor exist to catch overflow a hand-calibrated `clamp()` cannot
+ * see, and a measured fit cannot overflow.
+ *
+ * The band it replaces was binary (`.long`, at 90 characters), which meant one
+ * size for everything from four words to a full paragraph: a 51-character
+ * question was projected at the same 2.25em as "Why does ice float?" and ate
+ * 93px of a 720p wall for a line the room had already heard read out loud.
+ */
+const BANDS = [[26, 'q-xs'], [48, 'q-s'], [84, 'q-m'], [140, 'q-l']];
+function promptBand(text) {
+  const len = text.trim().length;
+  const band = BANDS.find(([max]) => len <= max);
+  return band ? band[1] : 'q-xl';
+}
 function promptNode(q) {
   const text = (q && q.prompt) || '';
-  return el('h1', { class: `scene-prompt${text.length > 90 ? ' long' : ''}`, text });
+  return el('h1', { class: `scene-prompt ${promptBand(text)}`, text });
 }
 
 function questionImage(q) {
@@ -436,7 +456,13 @@ function sceneReading(ctx, state) {
     el('p', { class: 'scene-kicker', text: t(`type.${q.type}`) }),
     promptNode(q),
     questionImage(q),
-    el('p', { class: 'scene-note', text: t('stage.read_aloud') }),
+    // The instruction reads as a control, not as fine print: the prototype's
+    // pill, with the speaking emoji as the only decoration (aria-hidden - the
+    // sentence already says it).
+    el('p', { class: 'scene-note read-hint' }, [
+      el('span', { class: 'wave', 'aria-hidden': 'true', text: '\u{1f5e3}️' }),
+      el('span', { text: t('stage.read_aloud') }),
+    ]),
   ]);
 }
 
@@ -488,7 +514,14 @@ function sceneAnswering(ctx, state) {
       ringSvg('s-ring'),
       // Answer *count* only: the distribution before the reveal would bias
       // everyone still deciding (SPEC-UX).
-      el('span', { class: 'stage-answers', id: 's-answers', text: t('stage.answers_in', { count: state.answerCount, total: state.playerCount }) }),
+      // `aria-live="off"`, explicitly: `#s-center` is a polite live region, so
+      // without this the counter inherits it and is announced on every single
+      // answer - nine times per question, straight over the reading of the
+      // prompt (PORT-PLAN D6).
+      el('span', {
+        class: 'stage-answers', id: 's-answers', 'aria-live': 'off',
+        text: t('stage.answers_in', { count: state.answerCount, total: state.playerCount }),
+      }),
     ]),
   ]);
 }
@@ -566,8 +599,17 @@ function sceneLeaderboard(ctx, state) {
   const rows = (state.leaderboard || []).slice(0, 5);
   const list = el('ol', { class: 'stage-lb' });
   if (!rows.length) list.appendChild(el('li', { text: t('lb.empty') }));
+  // How far behind the leader each row is, as a lane along the bottom edge of
+  // the row: the numbers alone do not say whether second place is 20 points or
+  // 2000 points away, which is the whole tension of a ranking slide. Absolutely
+  // positioned, so it never becomes a sixth grid track.
+  const best = rows.length ? Math.max(1, ...rows.map((p) => Number(p.score) || 0)) : 1;
   rows.forEach((p, i) => {
     list.appendChild(el('li', { class: i === 0 ? 'top1' : '', style: `animation-delay:${i * 90}ms` }, [
+      el('i', {
+        class: 'lb-fill', 'aria-hidden': 'true',
+        style: `--w:${Math.max(0, Math.min(100, Math.round(((Number(p.score) || 0) / best) * 100)))}%`,
+      }),
       el('span', { class: 'lb-rank', text: String(p.rank) }),
       el('span', { 'aria-hidden': 'true', text: p.avatar || '🙂' }),
       el('span', { class: 'name', text: p.nickname }),
