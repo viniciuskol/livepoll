@@ -9,5 +9,5 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "livepoll_db"
-database_id = "livepoll-local"
+database_id = "0591afbc-849b-46fd-b286-b00f3a905b93"
 migrations_dir = "migrations"
