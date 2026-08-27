@@ -147,7 +147,10 @@ function mountReactions() {
       text: emoji,
       'aria-label': emoji,
       onclick: async () => {
-        floatEmoji(emoji, 2);
+        // Exactly one bubble: the tap's own acknowledgement. Two read as the
+        // press and the send echoing each other, which is the duplicate the
+        // stage-only routing was supposed to have removed.
+        floatEmoji(emoji, 1);
         sfx.click();
         try { await rooms.reaction(ctx.code, ctx.playerToken, emoji); } catch { /* non critical */ }
       },
