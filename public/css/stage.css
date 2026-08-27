@@ -396,7 +396,7 @@ body.stage-on { overflow: hidden; }
 
 /* timer ring: base styles live in app.css, the stage only resizes it - in em,
    so a sparse scene gets a bigger clock along with everything else. */
-.stage .ring { width: min(4.2em, 20vh); }
+.stage .ring { width: min(4.2em, 20vh); overflow:visible; }
 .stage .ring .track { stroke: var(--stage-line); }
 .stage .ring text { fill: var(--stage-ink); }
 .timer-row { display: flex; align-items: center; justify-content: center; gap: clamp(12px, 2vw, 32px); }

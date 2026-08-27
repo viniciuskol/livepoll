@@ -9,3 +9,4 @@ playwright-report/
 test-results/
 playwright-report/
 docs/validation/
+.claude/scheduled_tasks.lock

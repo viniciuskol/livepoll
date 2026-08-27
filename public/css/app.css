@@ -544,7 +544,7 @@ input[type="file"]::file-selector-button {
 .explain b { color: var(--ink); }
 
 /* ---------- 12. Countdown ring (stage + phone) ---------- */
-.ring { width: 84px; height: auto; flex: none; }
+.ring { width: 84px; height: auto; flex: none; overflow: visible; }
 .ring circle { fill: none; stroke-width: 9; }
 .ring .track { stroke: rgba(255, 255, 255, 0.28); }
 .ring .run {
