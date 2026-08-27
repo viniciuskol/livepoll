@@ -137,6 +137,19 @@ body.ctrl-on { overflow: hidden; }
   min-height: 56px; border-radius: 20px; padding: 12px 16px;
   font-size: clamp(16px, 4.2vw, 23px);
 }
+/* The label was pinned to the *viewport* (`4.2vw` is 16.38px at 390px) while
+   the card around it is 143.5px tall with four options: three quarters of the
+   target was empty. `cqh` ties the type to the row height the grid actually
+   solved, so the same phone reads bigger with two options than with six. Only
+   inside `.ctrl-center.top`, where the grid's height is definite - `size`
+   containment on a content-sized row would collapse it to the 56px floor. */
+.ctrl-center.top .ctrl-opts:not(.tf) .opt { container-type: size; }
+.ctrl-center.top .ctrl-opts:not(.tf) .opt .txt {
+  font-size: clamp(16px, max(4.2vw, 17cqh), 30px);
+  /* A label that fits on one line sits on the card's midline rather than
+     riding the top of a box the flexbox stretched to full height. */
+  align-self: center; text-wrap: balance;
+}
 .ctrl-opts .opt .shape { width: 1.5em; height: 1.5em; }
 /* A dead option after the pick: still readable (the player wants to see what
    else was on offer) but out of the tab cycle - see lockOptions(). */
@@ -322,8 +335,16 @@ body.ctrl-on { overflow: hidden; }
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
 }
 .ctrl-foot .reactions {
-  justify-content: center; gap: 6px; flex-wrap: nowrap;
+  /* `safe center` is the whole fix: a *centred* flex row that overflows spills
+     equally past both edges, and the left spill cannot be scrolled to at all -
+     at 320px (scrollWidth 341 vs clientWidth 316) the first and last reaction
+     were simply unreachable. `safe` drops back to start alignment the moment
+     centring would clip, so everything stays scrollable. */
+  justify-content: center;
+  justify-content: safe center;
+  gap: 6px; flex-wrap: nowrap;
   overflow-x: auto; scrollbar-width: none; min-width: 0;
+  scroll-padding-inline: 6px;
 }
 .ctrl-foot .reactions::-webkit-scrollbar { display: none; }
 .ctrl-foot .reactions button {
@@ -472,7 +493,13 @@ body.ctrl-on { overflow: hidden; }
 /* ---- very narrow (320-400px, or 200% zoom) ------------------------------ */
 @media (max-width: 400px) {
   .ctrl-foot { padding-inline: 2px; }
-  .ctrl-foot .reactions { gap: 2px; }
+  /* At this width the strip really does scroll, so it has to look like it
+     does: the ends fade instead of ending in a hard cut. */
+  .ctrl-foot .reactions {
+    gap: 2px;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+  }
   .ctrl-center { padding: 10px 8px; }
   .ctrl-me b { max-width: 28vw; }
   .ctrl-stat { padding: 5px 8px; font-size: 0.76rem; }

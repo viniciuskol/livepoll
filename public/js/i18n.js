@@ -33,9 +33,28 @@ export function raw(key) {
   return value === undefined ? walk(dictionaries.en) : value;
 }
 
-/** Translated string with {placeholder} interpolation. */
+/** `<key>_one` / `<key>_other` when a count is given, else the plain key. */
+function plural(key, vars) {
+  if (vars && vars.count !== undefined) {
+    const n = Number(vars.count);
+    const variant = raw(`${key}${Math.abs(n) === 1 ? '_one' : '_other'}`);
+    if (typeof variant === 'string') return variant;
+  }
+  return raw(key);
+}
+
+/**
+ * Translated string with {placeholder} interpolation and plural selection.
+ *
+ * A string given a `count` looks for `<key>_one` / `<key>_other` first, so a
+ * dictionary can spell both forms out instead of projecting "1 perguntas neste
+ * bloco" at 82px on a wall. Keys with no variants fall through to the plain
+ * key, so nothing that does not need a plural has to declare one. English rules
+ * pick the bucket; es and pt agree with English on the 1/not-1 split, which is
+ * the only distinction any string in this app needs.
+ */
 export function t(key, vars) {
-  const value = raw(key);
+  const value = plural(key, vars);
   if (typeof value !== 'string') return String(key);
   if (!vars) return value;
   return value.replace(/\{(\w+)\}/g, (m, name) => (vars[name] === undefined ? m : String(vars[name])));

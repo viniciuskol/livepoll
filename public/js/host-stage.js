@@ -22,9 +22,13 @@ export function loadHostToken(code) {
 /** Label of the one primary action, per state. */
 export function primaryKey(state) {
   const s = state ? state.state : 'lobby';
+  const q = state && state.question;
   if (s === 'lobby') return 'stage.primary_start';
   if (s === 'block_intro') return 'stage.primary_block';
-  if (s === 'reading') return 'stage.primary_options';
+  // An open question has no options and never will, so neither the note on the
+  // wall nor the button under it may promise any: "Show options" was a button
+  // that did something else than it said, in front of a room.
+  if (s === 'reading') return q && q.type === 'open_text' ? 'stage.primary_open' : 'stage.primary_options';
   if (s === 'answering') return 'stage.primary_reveal';
   if (s === 'reveal') return 'stage.primary_leaderboard';
   if (s === 'leaderboard') {
@@ -224,7 +228,15 @@ function render(ctx, state, opts = {}) {
 
   const key = sceneKey(ctx, state);
   if (key !== ctx.sceneKey || opts.force) {
+    // The room looks up when the wall changes, and it should hear why: the
+    // prototype's cue set, on the transition rather than on the click.
+    if (ctx.sceneKey !== null && key !== ctx.sceneKey) {
+      if (state.state === 'reveal') sfx.reveal();
+      else if (state.state === 'leaderboard') sfx.board();
+      else sfx.whoosh();
+    }
     ctx.sceneKey = key;
+    ctx.gradeFocused = false;
     const center = $('#s-center');
     center.innerHTML = '';
     center.appendChild(buildScene(ctx, state));
@@ -256,9 +268,11 @@ function renderStrip(ctx, state) {
   const joinable = state.state !== 'ended';
   show($('#s-codewrap'), joinable);
   show($('#s-qr'), joinable);
-  $('#s-block').textContent = state.blockName
-    ? `${t('panel.block')}: ${state.blockName}`
-    : (state.title || '');
+  // On `block_intro` the block name *is* the slide - the strip chip would be
+  // the third printing of the same string on one screen (SPEC-UX rule 5).
+  $('#s-block').textContent = state.state === 'block_intro'
+    ? ''
+    : (state.blockName ? `${t('panel.block')}: ${state.blockName}` : (state.title || ''));
   $('#s-qof').textContent = state.questionIndex != null && state.state !== 'ended'
     ? t('panel.question_of', { index: state.questionIndex + 1, total: state.totalQuestions })
     : '';
@@ -324,8 +338,8 @@ function patchScene(ctx, state) {
     // re-solved (and the fold-away count recomputed) - but only then.
     if (added) { fitRegion($('#s-center')); trimRoster(roster); }
   }
-  const count = $('#s-lobby-count');
-  if (count) count.textContent = t('stage.players_here', { count: state.playerCount });
+  // The room count lives in the strip chip and only there: the lobby printed it
+  // twice on one screen, once in the chip and once under the join URL.
 }
 
 function sceneLobby(ctx, state) {
@@ -336,7 +350,6 @@ function sceneLobby(ctx, state) {
         el('p', { class: 'scene-kicker', text: t('panel.room_code') }),
         el('div', { class: 'lobby-code', text: state.code }),
         el('p', { class: 'lobby-join', text: t('stage.join_call', { url: ctx.joinUrl.replace(/^https?:\/\//, '') }) }),
-        el('p', { class: 'scene-note', id: 's-lobby-count', text: t('stage.players_here', { count: state.playerCount }) }),
       ]),
       el('div', {}, [
         el('div', { class: 'lobby-qr' }, qr),
@@ -467,7 +480,7 @@ function sceneReading(ctx, state) {
     // sentence already says it).
     el('p', { class: 'scene-note read-hint' }, [
       el('span', { class: 'wave', 'aria-hidden': 'true', text: '\u{1f5e3}️' }),
-      el('span', { text: t('stage.read_aloud') }),
+      el('span', { text: t(q.type === 'open_text' ? 'stage.read_aloud_open' : 'stage.read_aloud') }),
     ]),
   ]);
 }
@@ -608,7 +621,10 @@ function sceneAnswering(ctx, state) {
  */
 function openWait(state) {
   const wrap = el('div', { class: 'open-wait' }, [
-    el('p', { class: 'scene-note', text: t('stage.waiting_answers') }),
+    // One headline, repainted with the room: it used to read "Waiting for
+    // answers" *next to* "EVERYONE ANSWERED", so the scene contradicted itself
+    // on the one screen the presenter reads to decide whether to move on.
+    el('p', { class: 'scene-note', id: 's-wait-note' }),
     el('div', { class: 'tiles', id: 's-tiles', 'aria-hidden': 'true' }),
     // Who the room is still waiting *for* - never who already sent. The list of
     // people who are done is a public typing-speed scoreboard, and it grows
@@ -634,7 +650,12 @@ function paintMissing(root, state) {
   // the label stayed blank until the first answer bumped the room's version.
   const label = (root.parentNode && root.parentNode.querySelector('#s-missing-label'))
     || $('#s-missing-label');
-  if (label) label.textContent = list.length ? t('stage.still_missing') : t('stage.all_in');
+  // The headline says whether the room is done; the label below it only names
+  // the people still missing, and says nothing at all once there are none.
+  const note = (root.parentNode && root.parentNode.querySelector('#s-wait-note'))
+    || $('#s-wait-note');
+  if (note) note.textContent = list.length ? t('stage.waiting_answers') : t('stage.all_in');
+  if (label) label.textContent = list.length ? t('stage.still_missing') : '';
   // Whatever does not fit is counted, never silently clipped - the same rule the
   // lobby roster follows. The server already caps the list it sends, so the
   // count comes from the room's own numbers, not from the array's length.
@@ -871,8 +892,11 @@ function gradingBlock(ctx, questionId, groups, answerKey, opts = {}) {
     if (g.correct !== null && g.correct !== undefined) grades.set(g.norm, g.correct);
     const pct = Math.round((g.count / total) * 100);
     const row = el('div', { class: 'group-row' });
-    const okBtn = el('button', { class: 'btn btn-sm', type: 'button', text: t('panel.mark_correct') });
-    const badBtn = el('button', { class: 'btn btn-sm btn-secondary', type: 'button', text: t('panel.mark_wrong') });
+    // A toggle group, not two buttons: `aria-pressed` was set and nothing in
+    // the CSS matched it, so the panel showed no trace of what was already
+    // marked. `.verdict-pick` gives the pair its pressed treatment.
+    const okBtn = el('button', { class: 'btn btn-sm btn-secondary verdict-pick pick-ok', type: 'button', text: t('panel.mark_correct') });
+    const badBtn = el('button', { class: 'btn btn-sm btn-secondary verdict-pick pick-no', type: 'button', text: t('panel.mark_wrong') });
     // Correctness is never colour-only, here as anywhere else (D6): the row
     // border is joined by a mark with its own opaque separator.
     const mark = el('span', { class: 'mark', 'aria-hidden': 'true' });
@@ -943,7 +967,8 @@ function gradingBlock(ctx, questionId, groups, answerKey, opts = {}) {
   wrap.setAttribute('role', 'group');
   wrap.setAttribute('aria-label', t('panel.grading_title'));
   return el('div', { class: 'scene', style: 'gap:10px' }, [
-    el('p', { class: 'scene-kicker', text: t('panel.grading_title') }),
+    // The overlay already carries this string in its <h2>, two lines up.
+    opts.titled === false ? null : el('p', { class: 'scene-kicker', text: t('panel.grading_title') }),
     keys.length ? el('p', { class: 'scene-note', text: `${t('panel.answer_key')}: ${keys.join(', ')}` }) : null,
     el('p', { class: 'scene-note', text: `${t('panel.grading_hint')} ${t('stage.grade_hint')} · ${t('stage.grade_keys')}` }),
     groups.length
@@ -1044,11 +1069,30 @@ function openShortcuts() {
   ]))));
 }
 
+/** The reveal scene's own grading panel, when it is the one on screen. */
+function inlineGradeList() {
+  const center = $('#s-center');
+  return center ? center.querySelector('.grade-list') : null;
+}
+
 /**
  * Grading is reachable for *any* answered open question, not only the one on
  * screen: a host who moved on had no way back before (P2-11).
  */
 async function openGrading(ctx) {
+  // Two panels with two `grades` maps meant that marking a group inline,
+  // opening `G` and saving from the overlay silently discarded the inline work
+  // and left the stage showing two verdicts for one answer. So `G` reaches for
+  // the panel already on the scene first; only from inside it does a second
+  // press open the picker, which is the one thing the inline panel cannot do
+  // (grade an *earlier* question).
+  const inline = inlineGradeList();
+  if (inline && !ctx.gradeFocused) {
+    ctx.gradeFocused = true;
+    (inline.querySelector('.group-row button') || inline).focus();
+    toast(t('panel.grading_here'));
+    return;
+  }
   const body = el('div', {});
   overlay('panel.grading_pick', body);
   try {
@@ -1068,7 +1112,7 @@ async function openGrading(ctx) {
       host.innerHTML = '';
       const data = await rooms.hostAnswers(ctx.code, ctx.hostToken, q.id);
       host.appendChild(el('h3', { text: q.prompt }));
-      host.appendChild(gradingBlock(ctx, q.id, data.groups || [], data.answerKey));
+      host.appendChild(gradingBlock(ctx, q.id, data.groups || [], data.answerKey, { titled: false }));
     };
     open.forEach((q, i) => {
       picker.appendChild(el('button', {
@@ -1090,6 +1134,9 @@ async function openGrading(ctx) {
 
 /* ------------------------------------------------------------------- timer */
 
+/** Seconds left when the clock stops ticking and starts insisting. */
+const URGENT_FROM = 5;
+
 /** Animates the timer ring between polls. */
 function tickTimer(ctx) {
   const state = ctx.state;
@@ -1099,6 +1146,15 @@ function tickTimer(ctx) {
     const remaining = Math.max(0, total - (Date.now() + ctx.serverOffset - state.startedAt));
     paintRing(ring, remaining, total);
     ring.setAttribute('aria-label', t('panel.time_left', { seconds: Math.ceil(remaining / 1000) }));
+    // One beep per whole second inside the last five, and only while the clock
+    // is really running: the room hears the round ending instead of watching a
+    // ring nobody at the back can resolve.
+    const second = Math.ceil(remaining / 1000);
+    if (remaining > 0 && second <= URGENT_FROM && ctx.urgentAt !== second) {
+      ctx.urgentAt = second;
+      sfx.urgent();
+    }
+    if (second > URGENT_FROM) ctx.urgentAt = null;
   }
   requestAnimationFrame(() => tickTimer(ctx));
 }

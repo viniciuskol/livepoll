@@ -64,8 +64,10 @@ async function step(host) {
   );
 }
 
-async function createRoom(browser, viewport, errors, csv = QUIZ) {
-  const ctx = await browser.newContext({ viewport });
+async function createRoom(browser, viewport, errors, csv = QUIZ, locale) {
+  // `locale` drives navigator.language, which is what detectLang() reads: it is
+  // the only way to get the app into pt or es without touching its storage.
+  const ctx = await browser.newContext(locale ? { viewport, locale } : { viewport });
   const host = await ctx.newPage();
   guardConsole(host, errors);
   await host.goto('/host.html');
@@ -253,15 +255,37 @@ test('open answers can be graded without touching the mouse', async ({ browser }
   expect(await answerAs(host, code, token, 0)).toBe(200);
   await step(host); // reveal + grading rows
 
-  // G, then keyboard only: focus lands on a mark button, Enter marks it, Tab
-  // reaches "save".
+  // `G` on a reveal that already carries this question's panel must *reach*
+  // that panel, not open a second one: two panels meant two independent
+  // `grades` maps, and saving from the overlay silently discarded whatever had
+  // been marked inline, leaving two verdicts on the wall for one answer.
   await host.locator('body').press('g');
-  await expect(host.locator('.stage-overlay .group-row')).toHaveCount(1);
-  await expect(host.locator('.stage-overlay .group-row button').first()).toBeFocused();
+  await expect(host.locator('.stage-overlay')).toHaveCount(0);
+  const inlineRows = host.locator('#s-center .grade-list .group-row');
+  await expect(inlineRows).toHaveCount(1);
+  await expect(inlineRows.locator('button').first()).toBeFocused();
+
+  // Keyboard only from here: Enter marks the focused group, and the pressed
+  // state is real CSS, not just an ARIA attribute nothing paints.
   await host.keyboard.press('Enter');
-  await expect(host.locator('.stage-overlay .group-row.marked-ok')).toHaveCount(1);
-  await host.locator('.stage-overlay #save-grades').press('Enter');
+  await expect(inlineRows.first()).toHaveClass(/marked-ok/);
+  const pressedBg = await host.locator('#s-center .pick-ok').first()
+    .evaluate((n) => getComputedStyle(n).backgroundColor);
+  expect(pressedBg).not.toBe('rgba(0, 0, 0, 0)');
+  await host.locator('#s-center #save-grades').press('Enter');
   await expect(host.locator('.toast')).toContainText(/aved|alv|uard/);
+
+  // Only *then* does `G` escalate to the picker - the one thing the inline
+  // panel cannot do is grade an earlier question. The saved verdict comes back
+  // with it, and the overlay inherits the stage's grading styling now that it
+  // lives inside `.stage`: the mark used to render 0x0 with no separator.
+  await host.keyboard.press('g');
+  await expect(host.locator('.stage-overlay .group-row')).toHaveCount(1);
+  await expect(host.locator('.stage-overlay .group-row.marked-ok')).toHaveCount(1);
+  const markBox = await host.locator('.stage-overlay .group-row .mark').first().boundingBox();
+  expect(markBox.width, 'the overlay verdict mark has a size').toBeGreaterThan(10);
+  const rowFont = await fontOf(host, '.stage-overlay .group-row');
+  expect(rowFont, 'the overlay grading rows carry the projector type ramp').toBeGreaterThanOrEqual(20);
   expect(errors).toEqual([]);
 });
 
@@ -291,3 +315,53 @@ test('two hosts pressing Space produce no console error (SPEC 12)', async ({ bro
   expect(result.every((r) => r.status === 200)).toBe(true);
   expect(errors, `console: ${errors.join(' | ')}`).toEqual([]);
 });
+
+/**
+ * The true/false verdict badge, in the languages where the words are long.
+ *
+ * `.mark` used to be absolutely positioned in the top-right corner of a card
+ * whose label spans the whole centred column, so any word wider than the
+ * English "True" ran under the glyph: 51.4x47.6px of overlap on "Verdadeiro" at
+ * 1280x720, 117.2x53.5px at 1920x1080, and nothing at all in English - which is
+ * exactly why a green English suite never saw it. So this one runs in pt and
+ * es, and it measures the intersection rather than trusting a screenshot.
+ */
+const LOCALE_CASES = [
+  { locale: 'pt-BR', viewport: { width: 1280, height: 720 }, words: /Verdadeiro|Falso/ },
+  { locale: 'es-ES', viewport: { width: 1920, height: 1080 }, words: /Verdadero|Falso/ },
+];
+
+for (const { locale, viewport, words } of LOCALE_CASES) {
+  test(`the true/false verdict mark never covers its label (${locale} at ${viewport.width}x${viewport.height})`, async ({ browser }) => {
+    const errors = [];
+    const csv = toCSV([
+      ['block', 'type', 'question', 'option1', 'option2', 'correct', 'time_limit', 'points'],
+      ['B', 'true_false', 'The Pacific is the largest ocean on Earth.', '', '', 'true', '60', '1000'],
+    ]);
+    const { host, code } = await createRoom(browser, viewport, errors, csv, locale);
+    const tokens = await joinMany(host, code, ['Ana', 'Bruno']);
+    await step(host); // reading
+    await step(host); // answering
+    for (const [i, token] of tokens.entries()) expect(await answerAs(host, code, token, (i % 2) + 1)).toBe(200);
+    await step(host); // reveal - every card carries a mark
+
+    // The labels really are translated: without this the assertion below would
+    // pass on an English stage that never had the bug.
+    await expect(host.locator('.stage-opts.tf .opt .txt').first()).toHaveText(words);
+    await expect(host.locator('.stage-opts.tf .opt .mark')).toHaveCount(2);
+
+    const overlaps = await host.evaluate(() => [...document.querySelectorAll('.stage-opts.tf .opt')].map((opt) => {
+      const mark = opt.querySelector('.mark');
+      const txt = opt.querySelector('.txt');
+      if (!mark || !txt) return null;
+      const a = mark.getBoundingClientRect();
+      const b = txt.getBoundingClientRect();
+      const w = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      return w > 0 && h > 0 ? Math.round(w * h) : 0;
+    }));
+    expect(overlaps, `verdict mark overlapping the label in ${locale}`).toEqual([0, 0]);
+    expect(await overflowOf(host), `tf reveal overflow in ${locale}`).toBe(0);
+    expect(errors, `console: ${errors.join(' | ')}`).toEqual([]);
+  });
+}

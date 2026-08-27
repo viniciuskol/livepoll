@@ -344,7 +344,15 @@ body.stage-on { overflow: hidden; }
 }
 .stage-opts .opt .mark.ok { background: var(--ok); }
 .stage-opts .opt .mark.no { background: #fff; }
-.stage-opts.tf .opt .mark { position: absolute; top: 0.4em; right: 0.4em; }
+/* In the true/false column the mark is a *sibling* of the label, not a badge
+   floated over it. Absolutely positioned it left the label spanning the whole
+   centred column, so any word wider than the English "True" ran straight under
+   the glyph: measured 51.4x47.6px of overlap on "Verdadeiro" at 1280x720 and
+   117.2x53.5px at 1920x1080, in pt and es but never in en - which is why the
+   English e2e suite never saw it. In flow it cannot overlap at any label width,
+   in any language. It is scaled down here because it is the third row of a card
+   whose type is the largest the option grid ever carries. */
+.stage-opts.tf .opt .mark { position: static; font-size: 0.5em; }
 
 /* 5 and 6 options - the case the prototype never had, since it only ever drew
    four. The stage does *not* collapse to one column here the way the phone
@@ -607,6 +615,11 @@ body.stage-on { overflow: hidden; }
 .stage-icon:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ---- overlays: shortcuts + open-answer grading ------------------------- */
+/* `#overlay-root` lives inside `.stage` so the grading rules below reach it.
+   `.stage` is a three-row grid, so the wrapper must not become a fourth row:
+   `display: contents` removes the box and leaves the fixed sheet to the
+   viewport. */
+#overlay-root { display: contents; }
 .stage-overlay {
   position: fixed; inset: 0; z-index: 75; display: grid; place-items: center;
   padding: 4vh 4vw;
@@ -620,6 +633,10 @@ body.stage-on { overflow: hidden; }
   border-radius: var(--r-xl); padding: clamp(18px, 3vw, 34px); box-shadow: var(--sh-2);
 }
 .stage-overlay .sheet > h2 { font-family: var(--font-display); }
+/* The grading rows inside the sheet are read off the same wall as the reveal,
+   so they get the projector's one type size instead of the 16px they inherited
+   while `#overlay-root` was a sibling of `.stage`. */
+.stage-overlay .sheet .grade-list { font-size: var(--stage-unit); }
 /* The prototype's shortcut cards, on the app's `.keys` markup. */
 .keys { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: clamp(8px, 1.2vw, 14px); grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
 .keys li {

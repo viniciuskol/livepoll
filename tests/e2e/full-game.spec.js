@@ -375,7 +375,9 @@ test('rows with problems are reported per line and block room creation', async (
     ['B', 'bogus_type', 'What type is this?', 'a', 'b', '1'],
   ]);
   await page.setInputFiles('#file', { name: 'bad.csv', mimeType: 'text/csv', buffer: Buffer.from(csv, 'utf8') });
-  await expect(page.locator('#validation')).toContainText('problem(s) found');
+  // `_one`/`_other` variants, not the old "problem(s)" dodge: three problems
+  // is plural in every one of the three dictionaries.
+  await expect(page.locator('#validation')).toContainText('3 problems found');
   const errorItems = page.locator('#validation .errors li');
   await expect(errorItems).toHaveCount(3);
   await expect(errorItems.nth(0)).toContainText('Row 2');

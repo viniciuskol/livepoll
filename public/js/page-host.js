@@ -20,10 +20,20 @@ import { startStage, loadHostToken } from './host-stage.js';
 const i18nReady = initI18n();
 
 let parsed = null; // { rows, result }
+let chosenFile = null;
+
+/** The file input paints nothing of its own, so its label says what was picked. */
+function paintFileName(file) {
+  chosenFile = file || null;
+  const node = $('#file-name');
+  if (node) node.textContent = chosenFile ? t('host.file_chosen', { name: chosenFile.name }) : t('host.file_none');
+}
+onLangChange(() => paintFileName(chosenFile));
 
 $('#file').addEventListener('change', async (e) => {
   await i18nReady;
   const file = e.target.files && e.target.files[0];
+  paintFileName(file);
   if (!file) { parsed = null; renderValidation(); return; }
   try {
     const matrix = await readSpreadsheetFile(file);
@@ -87,7 +97,7 @@ function renderValidation() {
   }
   const { result } = parsed;
   if (result.ok) {
-    box.appendChild(el('p', { class: 'pill pill-ok', text: `✅ ${t('valid.ok')} — ${t('host.preview_count', { count: result.questions.length, blocks: result.blocks.length })}` }));
+    box.appendChild(el('p', { class: 'pill pill-ok', text: `✅ ${t('valid.ok')} — ${t('host.preview_questions', { count: result.questions.length })} ${t('host.preview_blocks', { count: result.blocks.length })}` }));
   } else {
     box.appendChild(el('p', { class: 'pill pill-bad', text: `⚠️ ${t('valid.errors_found', { count: result.errors.length })}` }));
     const list = el('ul', { class: 'errors' });

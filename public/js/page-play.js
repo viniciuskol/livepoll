@@ -347,7 +347,9 @@ function sceneAnswering(state) {
   (q.options || []).forEach((option, i) => {
     const btn = optionButton(q, option, i, () => {
       if (ctx.submitted || ctx.timeUp) return;
-      sfx.click();
+      // Marking an option is not the same gesture as pressing a button, so it
+      // does not get the same sound.
+      sfx.pick();
       vibrate(12);
       if (multi) {
         if (ctx.selection.has(option.position)) ctx.selection.delete(option.position);
@@ -703,6 +705,9 @@ async function submitAnswer() {
   }
 }
 
+/** Seconds left when the clock stops ticking and starts insisting. */
+const URGENT_FROM = 5;
+
 /**
  * Locks the answer UI the instant the timer reaches zero, so a late tap can no
  * longer produce a confusing TIME_UP toast (the server only tolerates a few
@@ -716,6 +721,14 @@ function tickTimer() {
     const ring = $('#p-ring');
     paintRing(ring, remaining, total);
     if (ring) ring.setAttribute('aria-label', t('panel.time_left', { seconds: Math.ceil(remaining / 1000) }));
+    // The phone counts the last five seconds out loud - but only while this
+    // player still has something to lose by not answering.
+    const second = Math.ceil(remaining / 1000);
+    if (remaining > 0 && second <= URGENT_FROM && ctx.urgentAt !== second && !ctx.submitted) {
+      ctx.urgentAt = second;
+      sfx.urgent();
+    }
+    if (second > URGENT_FROM) ctx.urgentAt = null;
     // Marked but not confirmed, with the clock running out. Losing a question
     // you knew because you did not press a button nobody said was mandatory is
     // the worst way to lose a quiz, so the phone warns once and then sends the

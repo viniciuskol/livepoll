@@ -13,8 +13,34 @@ export function setMuted(value) {
 }
 export function toggleMuted() { setMuted(!muted); return muted; }
 
+/* ---------------------------------------------------------------- the cues
+ * The prototype's cue set (neon.js §2), synthesized - no files, no CDN.
+ *
+ * Chrome refuses to start an AudioContext that was not created inside a user
+ * gesture *on the current page*, and the permission does not survive a
+ * navigation. The cues that matter (reveal, correct, fanfare) fire on a render,
+ * never on a click, so on a cold page they were simply silent. Anything asked
+ * for before the first gesture therefore waits in a short queue and is released
+ * by it - dropped if it has gone stale, because a "correct" chime arriving ten
+ * seconds after the reveal is worse than no chime. The app is a single
+ * long-lived page, so this happens once per session and the queue stays small.
+ */
+const QUEUE_TTL = 4000;
+let armed = false;
+const pending = [];
+
+function arm() {
+  if (armed) return;
+  armed = true;
+  try { audio(); } catch { return; }
+  const now = Date.now();
+  pending.splice(0).forEach((job) => { if (now - job.at < QUEUE_TTL) job.run(); });
+}
+['pointerdown', 'keydown', 'touchstart'].forEach((evt) => {
+  window.addEventListener(evt, arm, { once: true, capture: true });
+});
+
 function audio() {
-  if (muted) return null;
   if (!ctx) {
     const Ctor = window.AudioContext || window.webkitAudioContext;
     if (!Ctor) return null;
@@ -24,31 +50,95 @@ function audio() {
   return ctx;
 }
 
-function tone(freq, start, duration, type = 'sine', gain = 0.15) {
+/** True when the cue was parked for the first gesture instead of played now. */
+function deferred(run) {
+  if (muted) return true;
+  if (armed) return false;
+  pending.push({ at: Date.now(), run });
+  return true;
+}
+
+/**
+ * One oscillator note. `sweepTo` glides the pitch across the note, which is the
+ * whole of `whoosh` and half of `reveal`.
+ */
+function tone(freq, duration, type = 'sine', gain = 0.15, delay = 0, sweepTo = 0) {
+  if (deferred(() => tone(freq, duration, type, gain, delay, sweepTo))) return;
   const ac = audio();
   if (!ac) return;
+  const t0 = ac.currentTime + delay;
   const osc = ac.createOscillator();
   const amp = ac.createGain();
   osc.type = type;
-  osc.frequency.setValueAtTime(freq, ac.currentTime + start);
-  amp.gain.setValueAtTime(0.0001, ac.currentTime + start);
-  amp.gain.exponentialRampToValueAtTime(gain, ac.currentTime + start + 0.02);
-  amp.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + start + duration);
+  osc.frequency.setValueAtTime(freq, t0);
+  if (sweepTo) osc.frequency.exponentialRampToValueAtTime(sweepTo, t0 + duration);
+  amp.gain.setValueAtTime(0.0001, t0);
+  amp.gain.exponentialRampToValueAtTime(gain, t0 + 0.014);
+  amp.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
   osc.connect(amp).connect(ac.destination);
-  osc.start(ac.currentTime + start);
-  osc.stop(ac.currentTime + start + duration + 0.05);
+  osc.start(t0);
+  osc.stop(t0 + duration + 0.04);
+}
+
+/**
+ * A filtered noise burst - the cymbal half of the fanfare.
+ *
+ * The prototype computed a delay for each of its four bursts and then never
+ * passed it (neon.js:125), so all four fired on the same sample and the fanfare
+ * was one flat hiss. Here the delay reaches `start()`.
+ */
+function noise(duration, gain = 0.12, highpass = 900, delay = 0) {
+  if (deferred(() => noise(duration, gain, highpass, delay))) return;
+  const ac = audio();
+  if (!ac) return;
+  const frames = Math.max(1, Math.floor(ac.sampleRate * duration));
+  const buffer = ac.createBuffer(1, frames, ac.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < frames; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / frames);
+  const src = ac.createBufferSource();
+  src.buffer = buffer;
+  const filter = ac.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = highpass;
+  const amp = ac.createGain();
+  amp.gain.value = gain;
+  src.connect(filter).connect(amp).connect(ac.destination);
+  src.start(ac.currentTime + delay);
 }
 
 export const sfx = {
-  click: () => tone(660, 0, 0.08, 'triangle', 0.08),
-  tick: () => tone(880, 0, 0.04, 'square', 0.05),
-  correct: () => { tone(523, 0, 0.14); tone(659, 0.1, 0.16); tone(784, 0.2, 0.28); },
-  wrong: () => { tone(220, 0, 0.22, 'sawtooth', 0.12); tone(155, 0.14, 0.3, 'sawtooth', 0.1); },
-  join: () => { tone(392, 0, 0.1, 'triangle'); tone(587, 0.09, 0.16, 'triangle'); },
-  countdown: () => tone(440, 0, 0.12, 'square', 0.1),
-  start: () => { tone(523, 0, 0.1); tone(659, 0.08, 0.1); tone(880, 0.18, 0.24); },
-  podium: () => { [523, 659, 784, 1046].forEach((f, i) => tone(f, i * 0.12, 0.3)); },
+  /** Any UI press. */
+  click: () => tone(560, 0.05, 'triangle', 0.09),
+  /** An option being marked on the phone - two notes, so it is not a click. */
+  pick: () => { tone(420, 0.07, 'square', 0.07); tone(660, 0.09, 'triangle', 0.09, 0.04); },
+  /** Somebody arrived, or an answer landed. */
+  join: () => { tone(523, 0.1, 'sine', 0.1); tone(784, 0.14, 'sine', 0.1, 0.07); },
+  /** The clock, once per second. */
+  tick: () => tone(1180, 0.035, 'square', 0.045),
+  /** The last five seconds: same gesture, higher and louder. */
+  urgent: () => tone(1500, 0.05, 'square', 0.08),
+  /** A scene changing under the room. */
+  whoosh: () => tone(180, 0.4, 'sawtooth', 0.05, 0, 900),
+  /** 3 - 2 - 1, rising. */
+  countdown: (n = 1) => tone(400 + n * 120, 0.16, 'triangle', 0.13),
+  /** The round opening. */
+  start: () => { tone(523, 0.1, 'triangle', 0.12); tone(659, 0.09, 'triangle', 0.12, 0.08); tone(880, 0.24, 'triangle', 0.13, 0.18); },
+  /** The answer going up. */
+  reveal: () => tone(300, 0.25, 'sawtooth', 0.06, 0, 720),
+  /** Right: a major arpeggio. */
+  correct: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.32, 'triangle', 0.13, i * 0.075)),
+  /** Wrong: a two-note buzz, low enough not to be mistaken for the arpeggio. */
+  wrong: () => { tone(196, 0.3, 'sawtooth', 0.11); tone(146, 0.4, 'square', 0.08, 0.06); },
+  /** The leaderboard sliding in. */
+  board: () => [392, 494, 587].forEach((f, i) => tone(f, 0.4, 'sine', 0.1, i * 0.1)),
+  /** The podium: five notes over four cymbal bursts that actually stagger. */
+  podium: () => {
+    [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.5, 'triangle', 0.14, i * 0.12));
+    [0, 0.12, 0.24, 0.36].forEach((d) => noise(0.5, 0.06, 2200, d));
+  },
 };
+/** The prototype's name for the podium fanfare, kept as an alias. */
+sfx.fanfare = sfx.podium;
 
 export function vibrate(pattern) {
   if (navigator.vibrate && !reducedMotion()) navigator.vibrate(pattern);
@@ -131,7 +221,7 @@ export function countdown(from = 3) {
       span.style.animation = 'none';
       void span.offsetWidth;
       span.style.animation = '';
-      sfx.countdown();
+      sfx.countdown(n);
       n -= 1;
       setTimeout(step, 850);
     };
@@ -146,7 +236,7 @@ export function mountMuteButton(button, label) {
     button.setAttribute('aria-label', label());
     button.setAttribute('aria-pressed', String(muted));
   };
-  button.addEventListener('click', () => { toggleMuted(); paint(); if (!muted) sfx.click(); });
+  button.addEventListener('click', () => { arm(); toggleMuted(); paint(); if (!muted) sfx.click(); });
   paint();
   return paint;
 }

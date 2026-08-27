@@ -379,7 +379,15 @@ export async function groupOpenAnswers(env, question) {
   (results || []).forEach((a) => {
     const norm = normalizeText(a.text || '');
     if (!map.has(norm)) {
-      map.set(norm, { norm, sample: a.text || '', count: 0, nicknames: [], correct: gradeMap.has(norm) ? gradeMap.get(norm) : null });
+      // A manual grade wins; below it sits the verdict auto-grading already
+      // reached against the answer key. Without that fallback a question with a
+      // key opened an *empty* panel: accepted and rejected answers rendered
+      // identically and one careless click overwrote a correct auto-grade.
+      const auto = a.graded ? !!a.correct : null;
+      map.set(norm, {
+        norm, sample: a.text || '', count: 0, nicknames: [],
+        correct: gradeMap.has(norm) ? gradeMap.get(norm) : auto,
+      });
     }
     const g = map.get(norm);
     g.count += 1;

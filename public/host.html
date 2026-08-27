@@ -53,6 +53,9 @@
       <span class="drop-title" data-i18n="host.file_label"></span>
       <span class="drop-hint" data-i18n="host.file_formats"></span>
       <input id="file" type="file" accept=".csv,.tsv,.txt,.xlsx" data-i18n-aria-label="host.file_label" />
+      <!-- The chosen file, said in the room's language: the raw control paints
+           the browser's own "Choose File | No file chosen" in English. -->
+      <span class="drop-file" id="file-name" data-i18n="host.file_none"></span>
     </label>
     <div id="validation" aria-live="polite"></div>
     <div id="preview"></div>
@@ -143,7 +146,12 @@
        In here the strip and the footer (z-index 66) stay above it. -->
   <div id="confetti" aria-hidden="true"></div>
   <div id="fx-layer" aria-hidden="true"></div>
-</div>
 
-<div id="overlay-root"></div>
+  <!-- Inside the stage too, and for the same reason as the confetti: every
+       grading rule is written `.stage .grade-list ...`, so a sibling overlay
+       inherited none of it - the `G` panel rendered 0x0 verdict marks and 16px
+       rows on a projected wall. `display: contents` keeps it out of the stage's
+       three-row grid; the sheet inside is `position: fixed` anyway. -->
+  <div id="overlay-root"></div>
+</div>
 <script type="module" src="/js/page-host.js"></script>
