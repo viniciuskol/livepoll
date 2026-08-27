@@ -2,6 +2,16 @@ name = "livepoll"
 main = "src/worker/index.js"
 compatibility_date = "2025-09-01"
 
+# Cloudflare creates the `quiz` DNS record and issues the certificate for this
+# hostname on deploy; it must not be added to the zone by hand.
+routes = [
+  { pattern = "quiz.imvinicius.com", custom_domain = true }
+]
+
+# Declaring any route turns workers.dev off by default. Kept on so
+# livepoll.livepoll.workers.dev stays reachable as a fallback.
+workers_dev = true
+
 [assets]
 directory = "./public"
 binding = "ASSETS"
