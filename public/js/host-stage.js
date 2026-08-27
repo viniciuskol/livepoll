@@ -308,9 +308,15 @@ function buildScene(ctx, state) {
 
 function patchScene(ctx, state) {
   const answers = $('#s-answers');
-  if (answers) answers.textContent = t('stage.answers_in', { count: state.answerCount, total: state.playerCount });
+  if (answers) {
+    const multi = state.question && state.question.type === 'multiple_select';
+    answers.textContent = t(multi ? 'stage.confirmed_in' : 'stage.answers_in',
+      { count: state.answerCount, total: state.playerCount });
+  }
   const tiles = $('#s-tiles');
   if (tiles) paintTiles(tiles, state.answerCount);
+  const missing = $('#s-missing');
+  if (missing) paintMissing(missing, state);
   const roster = $('#s-roster');
   if (roster) {
     const added = patchRoster(roster, state.players || []);
@@ -491,24 +497,87 @@ function optionNode(q, option, i, revealed, share) {
   const correct = new Set(q.correct || []);
   const isCorrect = revealed && correct.has(option.position);
   const cls = `opt opt-${i + 1}${revealed ? (isCorrect ? ' is-correct' : ' is-wrong') : ''}`;
+  // A multiple_select question has to *look* multiple-choice-able before the
+  // first tap: an empty checkbox on every card is the only cue on the wall that
+  // says "more than one of these" without reading the hint (D3's sibling case).
+  const multi = q.type === 'multiple_select';
   return el('div', { class: cls, style: `animation-delay:${i * 70}ms` }, [
     el('span', { class: `shape ${SHAPES[i % SHAPES.length]}`, 'aria-hidden': 'true' }),
+    multi && !revealed ? el('span', { class: 'check', 'aria-hidden': 'true', text: '✓' }) : null,
     el('span', { class: 'txt', text: optionLabel(q, option) }),
-    isCorrect ? el('span', { class: 'tick', 'aria-hidden': 'true', text: '✔' }) : null,
+    // `.tick` on a single answer, `.mark` on the types where every row carries a
+    // verdict: true_false and multiple_select both go neutral at the reveal
+    // (PORT-PLAN D3), so a row with no marker at all would read as "not
+    // evaluated" rather than as "wrong".
+    isCorrect && !multi && q.type !== 'true_false'
+      ? el('span', { class: 'tick', 'aria-hidden': 'true', text: '✔' })
+      : null,
+    revealed && (multi || q.type === 'true_false')
+      ? el('span', { class: `mark ${isCorrect ? 'ok' : 'no'}`, 'aria-hidden': 'true', text: isCorrect ? '✓' : '✕' })
+      : null,
+    revealed
+      ? el('span', {
+          class: 'sr-only',
+          text: t(isCorrect ? 'panel.verdict_accepted' : 'panel.verdict_rejected'),
+        })
+      : null,
     share ? el('b', { class: 'pct', text: `${share.pct}% · ${share.count}` }) : null,
     share ? el('i', { class: 'fill', style: `width:${share.pct}%` }) : null,
+  ]);
+}
+
+/**
+ * The option grid's shape, by type (PORT-PLAN D3, §4 of the port map).
+ *
+ * Until now the single column came from `options.length <= 2` and nothing ever
+ * tested the type, which is why true_false rendered as a squeezed
+ * multiple_choice. The branch is explicit now:
+ *
+ * - `true_false` gets `.tf`: two cards that own the whole scene, shape above
+ *   text, no third and fourth row of void underneath them.
+ * - two options of any other type keep the full-width single column they had.
+ * - five and six options get `.many`, the case the prototype never had - real
+ *   spreadsheet content reaches six.
+ */
+function gridClass(q, options, revealed) {
+  const parts = ['stage-opts'];
+  if (revealed) parts.push('revealed');
+  if (q.type === 'true_false') parts.push('tf');
+  else if (options.length <= 2) parts.push('cols-1');
+  else if (options.length > 4) parts.push('many');
+  if (q.type === 'multiple_select') parts.push('multi');
+  return parts.join(' ');
+}
+
+/**
+ * How many marks a multiple_select expects. The answering payload deliberately
+ * withholds `correct` (anti-cheat), so the number comes from the host's own
+ * copy of the quiz - which may not have landed yet, hence the countless
+ * fallback rather than a "Mark undefined".
+ */
+function multiHint(ctx, q) {
+  const quizQ = ctx.quiz && (ctx.quiz.questions || []).find((x) => x.id === q.id);
+  const count = quizQ ? (quizQ.options || []).filter((o) => o.correct).length : 0;
+  return el('p', { class: 'multi-hint' }, [
+    el('span', { 'aria-hidden': 'true', text: '☑️' }),
+    el('span', { text: count > 0 ? t('stage.multi_hint', { count }) : t('stage.multi_hint_any') }),
   ]);
 }
 
 function sceneAnswering(ctx, state) {
   const q = state.question || {};
   const options = q.options || [];
-  const grid = el('div', { class: `stage-opts${options.length <= 2 ? ' cols-1' : ''}` },
+  const grid = el('div', { class: gridClass(q, options, false) },
     options.map((o, i) => optionNode(q, o, i, false)));
   const open = q.type === 'open_text';
+  const multi = q.type === 'multiple_select';
   return el('div', { class: 'scene', 'data-fit-max': open ? '2.2' : '1.8' }, [
     promptNode(q),
     questionImage(q),
+    // The rule of the round belongs on the wall, above the grid it governs:
+    // "you may mark more than one" is not something a player can infer from
+    // four cards that look exactly like a single-answer question.
+    multi ? multiHint(ctx, q) : null,
     open ? openWait(state) : grid,
     el('div', { class: 'timer-row' }, [
       ringSvg('s-ring'),
@@ -518,9 +587,14 @@ function sceneAnswering(ctx, state) {
       // without this the counter inherits it and is announced on every single
       // answer - nine times per question, straight over the reading of the
       // prompt (PORT-PLAN D6).
+      // "Answered" is the wrong verb for a multiple_select: a phone with two
+      // options marked and nothing confirmed has *not* answered, and the
+      // counter is the only thing telling the presenter whether the room is
+      // still working or already done.
       el('span', {
         class: 'stage-answers', id: 's-answers', 'aria-live': 'off',
-        text: t('stage.answers_in', { count: state.answerCount, total: state.playerCount }),
+        text: t(multi ? 'stage.confirmed_in' : 'stage.answers_in',
+          { count: state.answerCount, total: state.playerCount }),
       }),
     ]),
   ]);
@@ -536,9 +610,59 @@ function openWait(state) {
   const wrap = el('div', { class: 'open-wait' }, [
     el('p', { class: 'scene-note', text: t('stage.waiting_answers') }),
     el('div', { class: 'tiles', id: 's-tiles', 'aria-hidden': 'true' }),
+    // Who the room is still waiting *for* - never who already sent. The list of
+    // people who are done is a public typing-speed scoreboard, and it grows
+    // instead of shrinking, so at 200 players it is also the thing that
+    // overflows the scene. This one empties itself as the answers land.
+    el('p', { class: 'scene-kicker missing-label', id: 's-missing-label' }),
+    el('div', { class: 'typing', id: 's-missing' }),
   ]);
   paintTiles(wrap.querySelector('#s-tiles'), state.answerCount);
+  paintMissing(wrap.querySelector('#s-missing'), state);
   return wrap;
+}
+
+/** How many names the wall shows before it starts counting the rest. */
+const MAX_MISSING_CHIPS = 24;
+
+/** Repaints the "still to answer" chips in place, so the fold does not flicker. */
+function paintMissing(root, state) {
+  if (!root) return;
+  const list = state.missing || [];
+  // Relative to the node, not to the document: `openWait` paints the list while
+  // the scene is still detached, so a document-wide lookup found nothing and
+  // the label stayed blank until the first answer bumped the room's version.
+  const label = (root.parentNode && root.parentNode.querySelector('#s-missing-label'))
+    || $('#s-missing-label');
+  if (label) label.textContent = list.length ? t('stage.still_missing') : t('stage.all_in');
+  // Whatever does not fit is counted, never silently clipped - the same rule the
+  // lobby roster follows. The server already caps the list it sends, so the
+  // count comes from the room's own numbers, not from the array's length.
+  const shown = list.slice(0, MAX_MISSING_CHIPS);
+  const hidden = Math.max(0,
+    (Number(state.playerCount) || 0) - (Number(state.answerCount) || 0) - shown.length);
+  const seen = new Set();
+  shown.forEach((p) => {
+    seen.add(String(p.id));
+    if (root.querySelector(`[data-player="${p.id}"]`)) return;
+    root.appendChild(el('span', {
+      class: 'who', 'data-player': p.id,
+      text: `${p.avatar || '\u{1f642}'} ${p.nickname}`,
+    }));
+  });
+  [...root.children].forEach((node) => {
+    const key = node.getAttribute('data-player');
+    if (key !== 'more' && !seen.has(key)) node.remove();
+  });
+  let more = root.querySelector('[data-player="more"]');
+  if (hidden > 0) {
+    if (!more) more = el('span', { class: 'who more', 'data-player': 'more' });
+    // Re-appended so the counter stays last as names leave the list.
+    root.appendChild(more);
+    more.textContent = t('stage.roster_more', { count: hidden });
+  } else if (more) {
+    more.remove();
+  }
 }
 
 /** Keeps exactly `count` tiles on screen, popping the new ones in. */
@@ -565,7 +689,11 @@ function sceneReveal(ctx, state) {
     // which is both a stutter to read and the thing that overflowed the scene.
     // The share of the room now rides inside the grading row itself.
     const quizQ = ctx.quiz && (ctx.quiz.questions || []).find((x) => x.id === q.id);
-    children.push(gradingBlock(ctx, q.id, groups, quizQ && quizQ.answerKey));
+    // The reveal only has room for the head of a long tail: with 200 people a
+    // free-text question can produce forty distinct strings, and forty rows is
+    // not a slide. The top groups are shown with their verdicts, the counter
+    // says how many were left out, and `G` opens the full, scrollable list.
+    children.push(gradingBlock(ctx, q.id, groups, quizQ && quizQ.answerKey, { limit: REVEAL_GROUPS }));
   } else {
     const options = q.options || [];
     const counts = results.counts || [];
@@ -575,7 +703,7 @@ function sceneReveal(ctx, state) {
       const count = row ? row.count : 0;
       return { count, pct: Math.round((count / total) * 100) };
     };
-    children.push(el('div', { class: `stage-opts revealed${options.length <= 2 ? ' cols-1' : ''}` },
+    children.push(el('div', { class: gridClass(q, options, true) },
       options.map((o, i) => optionNode(q, o, i, true, shareOf(o.position)))));
   }
   if (q.explanation) children.push(el('p', { class: 'explain', text: `${t('panel.explanation')}: ${q.explanation}` }));
@@ -724,7 +852,9 @@ function sceneEnded(ctx, state) {
  * groups arrive unmarked, so the projected screen shows no correctness cue
  * before the host acts.
  */
-function gradingBlock(ctx, questionId, groups, answerKey) {
+const REVEAL_GROUPS = 6;
+
+function gradingBlock(ctx, questionId, groups, answerKey, opts = {}) {
   // The marks belong to *this* block, not to the panel: the reveal scene and the
   // "grade an earlier question" overlay can be on screen at the same time, and
   // a shared map would save one question's marks against the other.
@@ -734,23 +864,45 @@ function gradingBlock(ctx, questionId, groups, answerKey) {
     wrap.appendChild(el('p', { class: 'scene-note', text: t('panel.no_answers') }));
   }
   const total = groups.reduce((n, g) => n + g.count, 0) || 1;
-  groups.forEach((g) => {
+  // `groups` arrives sorted by count, so a cap keeps the head of the
+  // distribution - the answers the room actually gave - and drops the tail.
+  const shown = opts.limit ? groups.slice(0, opts.limit) : groups;
+  shown.forEach((g) => {
     if (g.correct !== null && g.correct !== undefined) grades.set(g.norm, g.correct);
     const pct = Math.round((g.count / total) * 100);
     const row = el('div', { class: 'group-row' });
     const okBtn = el('button', { class: 'btn btn-sm', type: 'button', text: t('panel.mark_correct') });
     const badBtn = el('button', { class: 'btn btn-sm btn-secondary', type: 'button', text: t('panel.mark_wrong') });
+    // Correctness is never colour-only, here as anywhere else (D6): the row
+    // border is joined by a mark with its own opaque separator.
+    const mark = el('span', { class: 'mark', 'aria-hidden': 'true' });
+    const verdict = el('span', { class: 'sr-only' });
+    // Names ride on *accepted* groups only. Praising by name is a reward the
+    // room enjoys; projecting who wrote the wrong answer - or the joke answer -
+    // is a punishment nobody agreed to when they typed it.
+    const who = el('span', { class: 'who-count' });
+    const names = (g.nicknames || []).slice(0, 6).join(', ');
     const paint = () => {
       const value = grades.get(g.norm);
       row.classList.toggle('marked-ok', value === true);
       row.classList.toggle('marked-bad', value === false);
       okBtn.setAttribute('aria-pressed', String(value === true));
       badBtn.setAttribute('aria-pressed', String(value === false));
+      mark.classList.toggle('ok', value === true);
+      mark.classList.toggle('no', value === false);
+      mark.textContent = value === true ? '✓' : (value === false ? '✕' : '');
+      verdict.textContent = value == null
+        ? ''
+        : t(value ? 'panel.verdict_accepted' : 'panel.verdict_rejected');
+      who.textContent = value === true && names ? t('panel.accepted_by', { names }) : '';
     };
     okBtn.addEventListener('click', () => { grades.set(g.norm, true); paint(); sfx.click(); });
     badBtn.addEventListener('click', () => { grades.set(g.norm, false); paint(); sfx.click(); });
     row.append(
+      mark,
       el('strong', { class: 'grow', text: g.sample || '—' }),
+      who,
+      verdict,
       // The count *and* the share: this row is now the only place the string is
       // printed, so it carries the distribution the bars used to duplicate.
       el('span', { class: 'pill', text: `${g.count} · ${pct}%` }),
@@ -780,10 +932,26 @@ function gradingBlock(ctx, questionId, groups, answerKey) {
     onclick: () => saveGrades(ctx, questionId, grades),
   });
   const keys = (answerKey || []).filter(Boolean);
+  // A capped list has to say so. Silently dropping the tail of a distribution
+  // is the difference between "these are the answers" and "these are some of
+  // the answers", and only one of those is true on the reveal slide.
+  const capped = shown.length < groups.length;
+  // The list is the one element on the stage allowed to scroll, so it says so
+  // and takes focus itself: `tabindex` makes the arrow keys scroll it even
+  // before the presenter has tabbed onto a mark button.
+  wrap.setAttribute('tabindex', '0');
+  wrap.setAttribute('role', 'group');
+  wrap.setAttribute('aria-label', t('panel.grading_title'));
   return el('div', { class: 'scene', style: 'gap:10px' }, [
     el('p', { class: 'scene-kicker', text: t('panel.grading_title') }),
     keys.length ? el('p', { class: 'scene-note', text: `${t('panel.answer_key')}: ${keys.join(', ')}` }) : null,
     el('p', { class: 'scene-note', text: `${t('panel.grading_hint')} ${t('stage.grade_hint')} · ${t('stage.grade_keys')}` }),
+    groups.length
+      ? el('p', { class: 'scene-note grade-count' }, [
+          el('span', { text: t('panel.showing_groups', { shown: shown.length, total: groups.length }) }),
+          capped ? el('span', { class: 'grade-more', text: ` · ${t('panel.grade_all_hint')}` }) : null,
+        ])
+      : null,
     wrap,
     groups.length ? save : null,
   ]);

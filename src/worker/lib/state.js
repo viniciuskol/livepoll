@@ -175,6 +175,7 @@ export async function buildState(env, room, { playerToken, isHost } = {}) {
     settings: { showPromptOnPhone: showPrompt },
     question: null,
     answerCount: 0,
+    missing: null,
     results: null,
     leaderboard: null,
     players: null,
@@ -196,6 +197,25 @@ export async function buildState(env, room, { playerToken, isHost } = {}) {
     // The distribution is reveal-only: showing it while the room is still
     // answering biases everyone who has not answered yet (SPEC-UX).
     if (state === 'reveal') payload.results = await buildResults(env, current, options);
+
+    // An open question has nothing to project: the prompt is being answered in
+    // words, and the two obvious things to put on the wall are both wrong.
+    // Showing what was typed hands the answer to everyone still thinking;
+    // showing who already sent turns the wall into a public typing-speed
+    // scoreboard the moment the room is bigger than a table. What is left is
+    // the useful half - who the presenter is still waiting for. Host only, and
+    // only while an open question is being answered, so it costs one extra
+    // query in exactly one state and never reaches a player's phone.
+    if (isHost && state === 'answering' && current.type === 'open_text') {
+      const { results: done } = await env.DB.prepare(
+        'SELECT player_id FROM answers WHERE question_id = ?'
+      ).bind(current.id).all();
+      const sent = new Set((done || []).map((r) => r.player_id));
+      payload.missing = players
+        .filter((p) => !sent.has(p.id))
+        .slice(0, LOBBY_ROSTER_LIMIT)
+        .map((p) => ({ id: p.id, nickname: p.nickname, avatar: p.avatar || '' }));
+    }
   }
 
   if (state === 'leaderboard' || state === 'ended' || state === 'reveal') {

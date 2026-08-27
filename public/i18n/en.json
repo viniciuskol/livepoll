@@ -101,7 +101,12 @@
     "final_title": "Final podium",
     "podium_cheer": "And the winners are...",
     "qr_label": "QR code with the join link",
-    "answer_key": "Accepted answers"
+    "answer_key": "Accepted answers",
+    "showing_groups": "Showing {shown} of {total} answer groups",
+    "grade_all_hint": "Press G to grade every group",
+    "accepted_by": "Accepted · {names}",
+    "verdict_accepted": "Accepted",
+    "verdict_rejected": "Not accepted"
   },
   "play": {
     "look_at_stage": "Look at the stage",
@@ -151,7 +156,13 @@
     "reactions": "Send a reaction",
     "leave": "Leave room",
     "streak_started": "Streak started",
-    "first_blood": "First one down!"
+    "first_blood": "First one down!",
+    "marked_count": "{count} marked",
+    "confirm_now": "Confirm to make it count!",
+    "chars_used": "{count} of {max} characters",
+    "recap_title": "Your marks",
+    "recap_missed": "Missed",
+    "partial_note": "{hits} of {total} correct"
   },
   "lb": {
     "delta_up": "up {count}",
@@ -274,7 +285,12 @@
     "stat_best_streak": "Best streak",
     "stat_accuracy": "Room accuracy",
     "stat_perfect": "Perfect rounds",
-    "thanks": "Thanks for playing!"
+    "thanks": "Thanks for playing!",
+    "multi_hint": "Mark {count} — right answers add, wrong ones subtract",
+    "multi_hint_any": "Mark every correct answer — right answers add, wrong ones subtract",
+    "confirmed_in": "{count} of {total} confirmed",
+    "still_missing": "Still to answer",
+    "all_in": "Everyone has answered"
   },
   "template": {
     "sheet": "Questions",

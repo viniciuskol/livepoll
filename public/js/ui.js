@@ -47,6 +47,9 @@ export function optionLabel(question, option) {
 }
 
 export function optionButton(question, option, index, onClick) {
+  // A multiple_select target carries a checkbox: it is the only thing that
+  // tells a thumb, before the first tap, that this question does not end on it.
+  const multi = question.type === 'multiple_select';
   return el('button', {
     class: `opt opt-${index + 1}`,
     type: 'button',
@@ -57,6 +60,7 @@ export function optionButton(question, option, index, onClick) {
   }, [
     el('span', { class: `shape ${SHAPES[index % SHAPES.length]}`, 'aria-hidden': 'true' }),
     el('span', { class: 'txt', text: optionLabel(question, option) }),
+    multi ? el('span', { class: 'check', 'aria-hidden': 'true', text: '✓' }) : null,
   ]);
 }
 

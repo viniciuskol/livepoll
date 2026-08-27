@@ -142,6 +142,97 @@ body.ctrl-on { overflow: hidden; }
    else was on offer) but out of the tab cycle - see lockOptions(). */
 .ctrl-opts .opt[aria-disabled="true"] { cursor: default; }
 
+/* ---- the four question types on the phone (PORT-PLAN D3) ----------------
+   The base grid above is single-column and type-agnostic; everything below is
+   the explicit per-type branch that the app never had, and it has to stay
+   *before* the tablet/desktop section at the bottom of this file so that
+   section can still override it (same cascade order as neon.css §15/§18). */
+
+/* true_false: two targets, shape over word, each owning half the scene. */
+.ctrl-opts.tf { grid-auto-rows: minmax(96px, 1fr); }
+.ctrl-opts.tf .opt {
+  flex-direction: column; justify-content: center; text-align: center; gap: 8px;
+  font-size: clamp(24px, 7.5vw, 38px); font-weight: 900;
+}
+/* In a column the inherited `flex: 1` on the label would push shape and word
+   apart to the two ends of the card. */
+.ctrl-opts.tf .opt .txt { flex: 0 0 auto; }
+.ctrl-opts.tf .opt .shape { width: 40px; height: 40px; }
+
+/* multiple_select: the checkbox is the promise that a tap does not end the
+   round, and the ring is the state of that promise. */
+.ctrl-opts .opt .check {
+  width: 28px; height: 28px; flex: none; border-radius: 9px;
+  border: 3px solid var(--opt-ink); background: rgba(255, 255, 255, 0.82);
+  display: grid; place-items: center;
+  font-size: 0.8em; font-weight: 900; color: transparent;
+  transition: background 0.18s, color 0.18s, transform 0.18s var(--e-back);
+}
+.ctrl-opts .opt[aria-pressed="true"] .check {
+  background: var(--opt-ink); color: #fff; transform: scale(1.08);
+}
+/* The confirm bar. Sticky at the foot of the scene, never scrolled away: it is
+   the difference between an answer and a set of marks nobody sent. */
+.confirm-bar {
+  display: flex; align-items: center; gap: 10px; flex: none;
+  padding-top: 2px;
+}
+.confirm-bar .btn { flex: 1; }
+.confirm-bar .count {
+  font-weight: 900; font-size: 14px; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* Marked and not yet confirmed: the count turns into a warning, because this is
+   the state in which a player can lose a question they knew. */
+.confirm-bar.pending .count { color: var(--warn); }
+.confirm-bar.urgent .count { color: var(--warn); animation: nudge 0.9s ease-in-out infinite; }
+.confirm-bar .btn[disabled] { opacity: 0.5; cursor: default; }
+
+/* open_text: the field, and the character counter `maxlength` alone never
+   explains. */
+.open-field { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.open-input {
+  width: 100%; padding: 16px 18px; border-radius: var(--r-l);
+  font-size: clamp(18px, 5.4vw, 26px); font-weight: 800; font-family: inherit;
+  background: rgba(0, 0, 0, 0.35); border: 2px solid var(--line);
+  color: var(--ink); text-align: center;
+}
+.open-input::placeholder { color: var(--ink-dim); font-weight: 600; }
+/* `outline`, never `box-shadow` (D6): a shadow loses the cascade here. */
+.open-input:focus-visible { outline: 3px solid var(--brand-3); outline-offset: 2px; border-color: var(--brand-3); }
+.open-chars {
+  display: block; text-align: right; font-size: 12px; color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+.open-chars.full { color: var(--warn); font-weight: 800; }
+
+/* The reveal recap of a multiple_select: the player's own marks, replayed. */
+.ctrl-recap { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 420px; }
+.ctrl-recap .opt {
+  min-height: 44px; padding: 8px 12px; border-radius: 14px;
+  font-size: 15px; cursor: default; animation: none;
+}
+.ctrl-recap .opt .shape { width: 20px; height: 20px; }
+.ctrl-recap .opt .mark {
+  flex: none; display: grid; place-items: center; width: 24px; height: 24px;
+  border-radius: 50%; font-size: 13px; font-weight: 900; color: var(--opt-ink);
+  /* Green on green disappears without an opaque separator (D6). */
+  box-shadow: 0 0 0 3px rgba(11, 6, 32, 0.9);
+}
+.ctrl-recap .opt .mark.ok { background: var(--ok); }
+.ctrl-recap .opt .mark.no { background: #fff; }
+.ctrl-recap .opt .mark.miss { background: var(--warn); }
+/* The recap rings are drawn tighter than the option rings in app.css: an 11px
+   double ring on a 44px row inside a 390px scene is clipped by the console. */
+.ctrl-recap .opt.is-correct { transform: none; box-shadow: 0 0 0 3px var(--bg-0), 0 0 0 6px var(--ok); }
+.ctrl-recap .opt.partial { transform: none; box-shadow: 0 0 0 3px var(--bg-0), 0 0 0 6px var(--warn); }
+.ctrl-recap .opt.is-wrong { transform: none; }
+/* An open answer is a field and a button, not a grid: nothing in this scene
+   absorbs the slack, so the column centres itself instead of hugging the top. */
+.ctrl-scene.open { justify-content: center; gap: 14px; }
+.points.partial { background: linear-gradient(100deg, var(--warn), #ff8a3d); -webkit-background-clip: text; background-clip: text; }
+.ctrl-title.warn { color: var(--warn); }
+
 .ctrl-ring { display: flex; align-items: center; justify-content: center; gap: 12px; flex: none; }
 .ctrl-ring .ring { width: 58px; }
 .ctrl-ring .count { font-weight: 800; font-size: 0.9rem; color: var(--ink-soft); }
@@ -288,6 +379,21 @@ body.ctrl-on { overflow: hidden; }
   /* A question with 5 or 6 alternatives stays in one column: at 2x3 the
      targets would be too short for a thumb. */
   .ctrl-opts.many { grid-template-columns: 1fr; grid-auto-rows: minmax(64px, 1fr); }
+  /* True/false on a tablet reintroduced the 672px target that the row cap above
+     exists to prevent (neon.css §18): two answers is not a reason to hand one
+     word half a square metre. Two columns, and the pair centres in what is
+     left over instead of stretching into it. */
+  .ctrl-opts.tf {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(120px, clamp(180px, 32vh, 300px));
+    align-content: center;
+  }
+  .ctrl-opts.tf .opt { font-size: clamp(30px, 3.4vw, 46px); }
+  .ctrl-opts.tf .opt .shape { width: 52px; height: 52px; }
+  .open-input { font-size: clamp(22px, 2.2vw, 32px); padding: 20px 24px; }
+  .confirm-bar .count { font-size: 1rem; }
+  .ctrl-recap { max-width: 520px; }
+  .ctrl-recap .opt { min-height: 52px; font-size: 1.05rem; }
   .ctrl-title { font-size: clamp(34px, 3.6vw, 48px); }
   .ctrl-note { font-size: clamp(17px, 1.7vw, 21px); max-width: 44ch; }
   .ctrl-big, .watch .eyes { font-size: clamp(88px, 11vw, 132px); }
@@ -332,6 +438,14 @@ body.ctrl-on { overflow: hidden; }
      two rows instead of three and the accessibility prompt still fits above it
      without the scene scrolling. */
   .ctrl-opts.many { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* 844x390: the T/F pair keeps its two columns but gives up the tall card. */
+  .ctrl-opts.tf { grid-auto-rows: minmax(52px, 1fr); }
+  .ctrl-opts.tf .opt { font-size: clamp(18px, 4.4vh, 30px); gap: 4px; }
+  .ctrl-opts.tf .opt .shape { width: 26px; height: 26px; }
+  .open-input { font-size: 17px; padding: 10px 14px; }
+  .confirm-bar { gap: 6px; }
+  .ctrl-recap { flex-direction: row; flex-wrap: wrap; justify-content: center; max-width: none; }
+  .ctrl-recap .opt { min-height: 38px; font-size: 13px; flex: 0 1 auto; }
   .ctrl-opts .opt { min-height: 52px; font-size: clamp(15px, 2.6vw, 20px); padding: 8px 12px; }
   .ctrl-opts .opt .shape { width: 1.3em; height: 1.3em; }
   .watch, .sent-card { gap: 6px; padding: 2px; }
@@ -369,13 +483,18 @@ body.ctrl-on { overflow: hidden; }
   .ctrl-opts { grid-auto-rows: minmax(46px, 1fr); gap: 7px; }
   .ctrl-opts .opt { min-height: 46px; font-size: 15px; padding: 8px 12px; border-radius: 16px; }
   .ctrl-opts .opt .shape { width: 1.2em; height: 1.2em; }
+  .ctrl-opts .opt .check { width: 22px; height: 22px; border-width: 2px; }
+  .ctrl-opts.tf { grid-auto-rows: minmax(74px, 1fr); }
+  .ctrl-opts.tf .opt { font-size: 22px; }
+  .ctrl-opts.tf .opt .shape { width: 30px; height: 30px; }
   .ctrl-ring .ring { width: 44px; }
 }
 
+@keyframes nudge { 50% { transform: translateX(3px); } }
 @keyframes watch-pulse { 50% { transform: scale(1.12); opacity: 0.7; } }
 @keyframes orb { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-7px); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .watch .eyes, .ctrl-wait .orb { animation: none !important; }
+  .watch .eyes, .ctrl-wait .orb, .confirm-bar.urgent .count { animation: none !important; }
   /* flash() already short-circuits on reduced motion; this is the belt to its
      braces, and it also kills the flash on a mid-flash preference change. */
   .flash { display: none !important; }

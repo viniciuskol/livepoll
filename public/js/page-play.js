@@ -7,6 +7,13 @@ import { rooms, errorMessage } from './api.js';
 import { createPoller } from './poll.js';
 
 const EMOJIS = ['👏', '🔥', '😂', '😮', '❤️', '🎉', '🤯', '👍'];
+/** Mirrors the `maxlength` the server enforces on an open answer. */
+const OPEN_MAX = 200;
+/** How long before zero a marked-but-unconfirmed phone is warned. */
+const CONFIRM_WARN_MS = 5000;
+/** ...and how long before zero those marks are sent for the player. The server
+ *  allows 400ms of clock skew (play.js GRACE_MS), so this stays inside it. */
+const AUTOSEND_MS = 250;
 const STORAGE = 'livepoll.player';
 
 await initI18n();
@@ -178,6 +185,8 @@ function render(state, force = false) {
     ctx.selection = new Set();
     ctx.submitted = false;
     ctx.timeUp = false;
+    ctx.confirmWarned = false;
+    ctx.autoSent = false;
   }
   if (me.answered) ctx.submitted = true;
 
@@ -287,15 +296,38 @@ function sceneAnswering(state) {
   if (showPrompt) scene.appendChild(el('p', { class: 'ctrl-prompt', text: q.prompt }));
 
   if (q.type === 'open_text') {
+    scene.classList.add('open');
+    const chars = el('span', { class: 'open-chars', 'aria-live': 'off' });
     const input = el('input', {
-      id: 'open-text', type: 'text', maxlength: '200',
+      id: 'open-text', class: 'open-input', type: 'text', maxlength: String(OPEN_MAX),
+      autocomplete: 'off', autocapitalize: 'sentences',
       placeholder: t('play.open_placeholder'), 'aria-label': t('play.open_placeholder'),
+      'aria-describedby': 'open-chars',
     });
+    const send = el('button', {
+      class: 'btn btn-block', id: 'submit-btn', type: 'button',
+      text: t('play.submit'), onclick: () => submitAnswer(),
+    });
+    // The counter is the only thing standing between a player and a silently
+    // truncated answer: `maxlength` stops the typing without saying why.
+    const paintChars = () => {
+      const n = input.value.length;
+      chars.textContent = `${n}/${OPEN_MAX}`;
+      chars.setAttribute('aria-label', t('play.chars_used', { count: n, max: OPEN_MAX }));
+      chars.classList.toggle('full', n >= OPEN_MAX);
+      send.disabled = input.value.trim().length === 0;
+    };
+    input.addEventListener('input', paintChars);
+    // Enter is `send` on a phone keyboard; without this the player has to
+    // dismiss the keyboard first to reach a button the keyboard is covering.
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitAnswer(); } });
     scene.append(
+      el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '✍️' }),
       el('p', { class: 'ctrl-note', text: t('play.answer_hint_open') }),
-      input,
-      el('button', { class: 'btn btn-block', id: 'submit-btn', type: 'button', text: t('play.submit'), onclick: () => submitAnswer() })
+      el('div', { class: 'open-field' }, [input, el('span', { id: 'open-chars' }, chars)]),
+      send
     );
+    paintChars();
     return scene;
   }
 
@@ -304,7 +336,14 @@ function sceneAnswering(state) {
   // a 2x3 grid makes every target too short for a thumb. Real spreadsheet
   // content reaches five and six options; the prototype never had more than four.
   const optionCount = (q.options || []).length;
-  const grid = el('div', { class: `ctrl-opts${optionCount > 4 ? ' many' : ''}`, id: 'options' });
+  // `tf`: two targets, shape over word, each one owning half the scene - the
+  // explicit type branch PORT-PLAN D3 asks for, instead of two cards that
+  // happen to be alone because `options.length <= 2`.
+  const gridCls = ['ctrl-opts'];
+  if (q.type === 'true_false') gridCls.push('tf');
+  if (optionCount > 4) gridCls.push('many');
+  if (multi) gridCls.push('multi');
+  const grid = el('div', { class: gridCls.join(' '), id: 'options' });
   (q.options || []).forEach((option, i) => {
     const btn = optionButton(q, option, i, () => {
       if (ctx.submitted || ctx.timeUp) return;
@@ -330,7 +369,20 @@ function sceneAnswering(state) {
     el('p', { class: 'ctrl-hint', text: multi ? t('play.select_hint_multi') : t('play.select_hint_single') }),
     grid
   );
-  if (multi) scene.appendChild(el('button', { class: 'btn btn-block', id: 'submit-btn', type: 'button', text: t('play.submit'), onclick: () => submitAnswer() }));
+  // Multiple selection needs an explicit confirmation, and it needs it to be
+  // visible: without it the first tap would end the answer and nobody would
+  // ever mark the second. The count next to the button is what makes the
+  // button look required rather than optional - a marked-but-unconfirmed phone
+  // is the one way to lose a question you actually knew.
+  if (multi) {
+    scene.appendChild(el('div', { class: 'confirm-bar' }, [
+      el('span', { class: 'count', id: 'p-marked', role: 'status' }),
+      el('button', {
+        class: 'btn btn-block', id: 'submit-btn', type: 'button',
+        text: t('play.submit'), onclick: () => submitAnswer(),
+      }),
+    ]));
+  }
   // The options landing in the hand get a short buzz.
   vibrate(18);
   paintSelection(grid);
@@ -344,6 +396,24 @@ function paintSelection(root) {
     const position = Number(btn.getAttribute('data-position'));
     btn.setAttribute('aria-pressed', String(ctx.selection.has(position)));
   });
+  paintConfirm(grid);
+}
+
+/**
+ * The confirm bar's own state. `n` marks and nothing sent is a *pending*
+ * answer, not an answer, so the bar says so and the button is only live once
+ * there is something to send.
+ */
+function paintConfirm(grid) {
+  const scene = grid && grid.parentNode;
+  const bar = scene && scene.querySelector('.confirm-bar');
+  if (!bar) return;
+  const n = ctx.selection.size;
+  const count = bar.querySelector('.count');
+  const send = bar.querySelector('#submit-btn');
+  if (count) count.textContent = n ? t('play.marked_count', { count: n }) : '';
+  bar.classList.toggle('pending', n > 0 && !ctx.submitted);
+  if (send) send.disabled = n === 0;
 }
 
 /**
@@ -390,9 +460,62 @@ function sceneWaiting(state) {
   return el('div', { class: 'sent-card' }, body);
 }
 
+/**
+ * What a multiple_select answer was actually worth, from data the phone already
+ * has: at the reveal the payload carries `question.correct`, and `me.answered`
+ * carries what was marked. The server reports `correct: true` for any ratio
+ * above zero, so without this a player who found one of two right answers and
+ * banked half the points is told "Correct!" - and so is a player who found one
+ * right answer and one wrong one.
+ */
+function markRecap(q, answered) {
+  if (!q || q.type !== 'multiple_select') return null;
+  const options = q.options || [];
+  const correct = new Set(q.correct || []);
+  if (!options.length || !correct.size || !answered) return null;
+  const chosen = new Set(answered.choice || []);
+  const hits = [...chosen].filter((c) => correct.has(c)).length;
+  const misses = chosen.size - hits;
+  return {
+    options, correct, chosen, hits, misses, total: correct.size,
+    partial: hits > 0 && (hits < correct.size || misses > 0),
+  };
+}
+
+/**
+ * The player's own marks, replayed. Right marks keep their ring, wrong marks
+ * desaturate, and a correct option that was never marked gets `.opt.partial` -
+ * the amber ring is exactly "neither credited nor penalised", which is what the
+ * missed half of a partial answer is. (`.opt.partial` is declared and never
+ * used in the prototype; this is the real use PORT-PLAN D5 asks for.)
+ */
+function recapNode(recap) {
+  const list = el('div', { class: 'ctrl-recap', role: 'list', 'aria-label': t('play.recap_title') });
+  recap.options.forEach((option, i) => {
+    const isRight = recap.correct.has(option.position);
+    const picked = recap.chosen.has(option.position);
+    // Only the rows that say something: what was marked, plus what should have
+    // been. The options the player correctly left alone are not news.
+    if (!picked && !isRight) return;
+    const kind = picked ? (isRight ? 'is-correct' : 'is-wrong') : 'partial';
+    const mark = picked ? (isRight ? 'ok' : 'no') : 'miss';
+    const glyph = mark === 'ok' ? '\u2713' : (mark === 'no' ? '\u2715' : '\u25cb');
+    const label = mark === 'ok' ? 'panel.verdict_accepted'
+      : (mark === 'no' ? 'panel.verdict_rejected' : 'play.recap_missed');
+    list.appendChild(el('span', { class: `opt opt-${i + 1} ${kind}`, role: 'listitem' }, [
+      el('span', { class: `shape ${SHAPES[i % SHAPES.length]}`, 'aria-hidden': 'true' }),
+      el('span', { class: 'txt', text: option.text }),
+      el('span', { class: `mark ${mark}`, 'aria-hidden': 'true', text: glyph }),
+      el('span', { class: 'sr-only', text: t(label) }),
+    ]));
+  });
+  return list.childElementCount ? list : null;
+}
+
 function sceneReveal(state) {
   const me = state.me || {};
   const answered = me.answered;
+  const recap = markRecap(state.question, answered);
   const body = [];
   if (!answered) {
     body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '⏱️' }));
@@ -400,6 +523,13 @@ function sceneReveal(state) {
   } else if (answered.graded === false) {
     body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '✍️' }));
     body.push(el('h1', { class: 'ctrl-title', text: t('play.pending_grade') }));
+  } else if (answered.correct && recap && recap.partial) {
+    // Neither green nor red. Telling someone who got half of it right that they
+    // were simply wrong is what kills the willingness to risk a second mark.
+    body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '🌗' }));
+    body.push(el('h1', { class: 'ctrl-title warn', text: t('play.partial') }));
+    body.push(el('div', { class: 'points partial', id: 'p-points', text: '0' }));
+    body.push(el('p', { class: 'ctrl-note', text: t('play.partial_note', { hits: recap.hits, total: recap.total }) }));
   } else if (answered.correct) {
     body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '✅' }));
     body.push(el('h1', { class: 'ctrl-title ok', text: t('play.correct') }));
@@ -426,6 +556,8 @@ function sceneReveal(state) {
   // streak it is just noise stealing the moment.
   if (Number(me.rankDelta) || badges.childElementCount === 0) badges.appendChild(deltaBadge(me.rankDelta));
   badges.appendChild(el('span', { class: 'badge', text: t('play.rank', { rank: me.rank || '-' }) }));
+  const marks = answered && recap ? recapNode(recap) : null;
+  if (marks) body.push(marks);
   body.push(badges);
   return el('div', { class: 'sent-card' }, body);
 }
@@ -445,10 +577,15 @@ function revealFeedback(state) {
   const me = state.me || {};
   const answered = me.answered;
   if (!answered || answered.graded === false) return;
+  const recap = markRecap(state.question, answered);
   if (answered.correct) {
-    flash('ok');
+    // Partial credit gets the amber flash and the shorter buzz: the celebration
+    // has to be smaller than the one a complete answer earns, or "almost" and
+    // "right" feel identical and the second mark stops being worth risking.
+    const half = recap && recap.partial;
+    flash(half ? 'warn' : 'ok');
     sfx.correct();
-    vibrate([18, 40, 26]);
+    vibrate(half ? [16, 40, 16] : [18, 40, 26]);
     countUp($('#p-points'), Number(answered.points) || 0);
   } else {
     flash('bad');
@@ -579,6 +716,26 @@ function tickTimer() {
     const ring = $('#p-ring');
     paintRing(ring, remaining, total);
     if (ring) ring.setAttribute('aria-label', t('panel.time_left', { seconds: Math.ceil(remaining / 1000) }));
+    // Marked but not confirmed, with the clock running out. Losing a question
+    // you knew because you did not press a button nobody said was mandatory is
+    // the worst way to lose a quiz, so the phone warns once and then sends the
+    // marks itself - inside the server's skew allowance, before the round ends.
+    const multi = state.question.type === 'multiple_select';
+    if (multi && !ctx.submitted && ctx.selection.size) {
+      if (remaining <= CONFIRM_WARN_MS && !ctx.confirmWarned) {
+        ctx.confirmWarned = true;
+        toast(t('play.confirm_now'), 'error');
+        vibrate([20, 40, 20]);
+        const bar = $('.confirm-bar');
+        if (bar) bar.classList.add('urgent');
+      }
+      // No early return: the frame loop has to keep running, the send is async
+      // and `submitAnswer` sets `ctx.submitted` in the same tick.
+      if (remaining <= AUTOSEND_MS && !ctx.autoSent) {
+        ctx.autoSent = true;
+        submitAnswer();
+      }
+    }
     if (remaining <= 0 && !ctx.timeUp) {
       ctx.timeUp = true;
       render(state, true);

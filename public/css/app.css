@@ -577,6 +577,9 @@ input[type="file"]::file-selector-button {
 .flash.run { animation: flash 0.75s var(--e-out); }
 .flash.ok { background: radial-gradient(circle at 50% 50%, rgba(61, 220, 132, 0.55), transparent 70%); }
 .flash.bad { background: radial-gradient(circle at 50% 50%, rgba(255, 77, 109, 0.5), transparent 70%); }
+/* Partial credit on a multiple_select: a third colour, because a green flash
+   for a half-right answer and a red one both lie about what just happened. */
+.flash.warn { background: radial-gradient(circle at 50% 50%, rgba(255, 176, 32, 0.5), transparent 70%); }
 
 .countdown {
   position: fixed; inset: 0; display: grid; place-items: center; z-index: 70;

@@ -101,7 +101,12 @@
     "final_title": "Pódio final",
     "podium_cheer": "E quem levou a melhor foi...",
     "qr_label": "Código QR com o link de entrada",
-    "answer_key": "Respostas aceitas"
+    "answer_key": "Respostas aceitas",
+    "showing_groups": "Mostrando {shown} de {total} grupos de respostas",
+    "grade_all_hint": "Aperte G para corrigir todos os grupos",
+    "accepted_by": "Aceita · {names}",
+    "verdict_accepted": "Aceita",
+    "verdict_rejected": "Não aceita"
   },
   "play": {
     "look_at_stage": "Olhe para o telão",
@@ -151,7 +156,13 @@
     "reactions": "Manda uma reação",
     "leave": "Sair da sala",
     "streak_started": "Sequência iniciada",
-    "first_blood": "Primeira certa!"
+    "first_blood": "Primeira certa!",
+    "marked_count": "{count} marcadas",
+    "confirm_now": "Confirme para valer!",
+    "chars_used": "{count} de {max} caracteres",
+    "recap_title": "Suas marcações",
+    "recap_missed": "Faltou",
+    "partial_note": "{hits} de {total} corretas"
   },
   "lb": {
     "delta_up": "subiu {count}",
@@ -274,7 +285,12 @@
     "stat_best_streak": "Maior sequência",
     "stat_accuracy": "Acerto da sala",
     "stat_perfect": "Rodadas perfeitas",
-    "thanks": "Obrigado por jogar!"
+    "thanks": "Obrigado por jogar!",
+    "multi_hint": "Marque {count} — os acertos somam, os erros descontam",
+    "multi_hint_any": "Marque todas as corretas — os acertos somam, os erros descontam",
+    "confirmed_in": "{count} de {total} confirmaram",
+    "still_missing": "Ainda faltam",
+    "all_in": "Todo mundo respondeu"
   },
   "template": {
     "sheet": "Perguntas",
