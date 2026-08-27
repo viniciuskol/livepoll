@@ -29,7 +29,7 @@
     "nickname_placeholder": "Tu nombre",
     "enter": "Entrar",
     "reopen": "Reabrir un panel de control",
-    "eyebrow": "Quiz en vivo · sin registro · funciona en tu propia máquina"
+    "eyebrow": "Quiz en vivo · Rápido y gratuito · Sin registro"
   },
   "host": {
     "show_prompt_label": "Mostrar el enunciado en los móviles",
@@ -170,7 +170,12 @@
     "chars_used": "{count} de {max} caracteres",
     "recap_title": "Tus marcas",
     "recap_missed": "Faltó",
-    "partial_note": "{hits} de {total} correctas"
+    "partial_note": "{hits} de {total} correctas",
+    "selected_one": "1 opción seleccionada",
+    "selected_other": "{count} opciones seleccionadas",
+    "selected_none": "Ninguna opción seleccionada",
+    "rejoined": "¡Bienvenido de nuevo! Se mantuvo tu puntuación.",
+    "session_lost": "Tu sesión expiró. Vuelve a entrar."
   },
   "lb": {
     "delta_up": "subió {count}",
@@ -258,6 +263,7 @@
     "points_clamped": "Los puntos \"{value}\" se ajustaron a {clamped} (permitido: de {min} a {max})"
   },
   "stage": {
+    "offline": "Salió",
     "join_call": "Entra en {url}",
     "players_here": "{count} en la sala",
     "nobody_yet": "Esperando al primer participante...",

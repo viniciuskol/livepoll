@@ -5,6 +5,7 @@ import { $, el, show, toast, optionButton, optionLabel, SHAPES, ringSvg, paintRi
 import { mountMuteButton, sfx, vibrate, confetti, floatEmoji, reducedMotion } from './fx.js';
 import { rooms, errorMessage } from './api.js';
 import { createPoller } from './poll.js';
+import { keepAwake } from './wake.js';
 
 const EMOJIS = ['👏', '🔥', '😂', '😮', '❤️', '🎉', '🤯', '👍'];
 /** Mirrors the `maxlength` the server enforces on an open answer. */
@@ -31,7 +32,6 @@ const ctx = {
   submitted: false,
   timeUp: false,
   questionId: null,
-  seenReactions: Date.now(),
   sceneKey: null,
   shownReveal: null,
   poller: null,
@@ -77,6 +77,10 @@ $('#join-form').addEventListener('submit', async (e) => {
     sfx.join();
     vibrate(30);
     enterRoom(code, res.playerToken, res.nickname, res.avatar);
+    // The server hands a dropped player their old row back rather than a new
+    // one. Say so: arriving on question four with the score you had is
+    // otherwise indistinguishable from the server having invented it.
+    if (res.resumed) toast(t('play.rejoined'), 'ok');
   } catch (err) {
     toast(err && err.code === 'ROOM_ENDED' ? t('play.session_over') : errorMessage(err), 'error');
   } finally {
@@ -84,6 +88,19 @@ $('#join-form').addEventListener('submit', async (e) => {
     btn.textContent = t('play.join_btn');
   }
 });
+
+/** Drops a dead session and shows the join form again. */
+function leaveRoom() {
+  if (ctx.poller) ctx.poller.stop();
+  try { localStorage.removeItem(STORAGE); } catch { /* ignore */ }
+  ctx.playerToken = '';
+  ctx.state = null;
+  document.body.classList.remove('ctrl-on');
+  show($('#game-view'), false);
+  show($('#join-view'), true);
+  show($('#join-topbar'), true);
+  toast(t('play.session_lost'), 'error');
+}
 
 function enterRoom(code, playerToken, nickname, avatar) {
   ctx.code = code;
@@ -100,9 +117,21 @@ function enterRoom(code, playerToken, nickname, avatar) {
   ctx.poller = createPoller(
     () => rooms.state(code, ctx.state ? ctx.state.version : null, playerToken),
     render,
-    (e) => { const m = errorMessage(e); if (m) toast(m, 'error'); }
+    (e) => {
+      // A saved token stops being valid when the room is gone, or when this
+      // player's name was reclaimed on another device. Polling it forever
+      // shows a frozen screen and an error every 700ms; the only way out is
+      // back to the join form.
+      if (e && (e.code === 'UNAUTHORIZED' || e.code === 'NOT_FOUND')) { leaveRoom(); return; }
+      const m = errorMessage(e);
+      if (m) toast(m, 'error');
+    }
   );
   ctx.poller.start();
+  // A player who has locked in an answer taps nothing until the reveal, which
+  // every phone reads as idle. Waking the handset to see your own score is the
+  // fastest way to miss the next question.
+  keepAwake();
   onLangChange(() => { paintMute(); if (ctx.state) render(ctx.state, true); });
   requestAnimationFrame(tickTimer);
 }
@@ -126,12 +155,11 @@ function mountReactions() {
   });
 }
 
-/** Floats only the reaction bubbles we have not shown yet. */
-function floatNewReactions(reactions) {
-  const list = reactions || [];
-  list.forEach((r) => { if (r.at > ctx.seenReactions) floatEmoji(r.emoji, 1); });
-  if (list.length) ctx.seenReactions = Math.max(ctx.seenReactions, ...list.map((r) => r.at));
-}
+/* The room's reactions belong on the stage, not on 30 phones: every handset
+ * replaying every emoji made the controller flicker during a question and stole
+ * attention from the screen everyone is supposed to be watching. The phone
+ * still floats the player's OWN tap (see mountReactions) so the button
+ * acknowledges the press. */
 
 function paintIdentity(me) {
   const nickname = (me && me.nickname) || ctx.nickname;
@@ -144,9 +172,8 @@ function paintIdentity(me) {
 
 /**
  * Lightweight `unchanged` poll response: nothing about the room moved, so only
- * the identity bar and the reaction bubbles are refreshed. Rank is not part of
- * this payload (it cannot change without a version bump), so the value already
- * on screen is kept.
+ * the identity bar is refreshed. Rank is not part of this payload (it cannot
+ * change without a version bump), so the value already on screen is kept.
  */
 function applyUnchanged(state) {
   ctx.serverOffset = state.serverNow - Date.now();
@@ -156,7 +183,6 @@ function applyUnchanged(state) {
   }
   const me = (ctx.state && ctx.state.me) || state.me || {};
   paintIdentity({ ...me, rank: me.rank });
-  floatNewReactions(state.reactions);
 }
 
 function render(state, force = false) {
@@ -168,7 +194,6 @@ function render(state, force = false) {
   const me = state.me || {};
   if (me.avatar) ctx.avatar = me.avatar;
   paintIdentity(me);
-  floatNewReactions(state.reactions);
 
   const q = state.question;
   // A *round* is a question plus the clock it was opened with, not just the
@@ -437,21 +462,39 @@ function lockOptions(grid, chosen, label, scene) {
   }
 }
 
+/** How many options a multiple_select answer marked, spelled out. */
+function selectionLabel(count) {
+  return count === 0 ? t('play.selected_none') : t('play.selected', { count });
+}
+
 /** After answering: the chosen shape plus a live counter, never a dead screen. */
 function sceneWaiting(state) {
   const q = state.question || {};
   const chosen = [...(ctx.selection.size ? ctx.selection : new Set(((state.me || {}).answered || {}).choice || []))];
-  const index = (q.options || []).findIndex((o) => o.position === chosen[0]);
+  const options = q.options || [];
+  const picked = chosen
+    .map((pos) => options.findIndex((o) => o.position === pos))
+    .filter((i) => i >= 0)
+    .sort((a, b) => a - b);
+  const index = picked.length ? picked[0] : -1;
   const answered = (state.me || {}).answered || {};
   const body = [];
   if (ctx.timeUp && !ctx.submitted) {
     body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '⏱️' }));
     body.push(el('h1', { class: 'ctrl-title', text: t('play.time_up') }));
   } else {
-    if (index >= 0) {
+    // A multiple_select is confirmed by its *count*, not by one shape: showing
+    // only `chosen[0]` told a player who marked three options that they had
+    // answered one, with no way to tell which two had been dropped.
+    if (q.type === 'multiple_select') {
+      body.push(el('div', { class: 'sent-multi', 'aria-hidden': 'true' },
+        picked.map((i) => el('span', { class: `sent-wrap opt opt-${i + 1}` },
+          el('span', { class: `sent-shape ${SHAPES[i % SHAPES.length]}` })))));
+      body.push(el('p', { class: 'ctrl-prompt', text: selectionLabel(picked.length) }));
+    } else if (index >= 0) {
       body.push(el('div', { class: `sent-wrap opt opt-${index + 1}` },
         el('span', { class: `sent-shape ${SHAPES[index % SHAPES.length]}`, 'aria-hidden': 'true' })));
-      body.push(el('p', { class: 'ctrl-prompt', text: optionLabel(q, (q.options || [])[index]) }));
+      body.push(el('p', { class: 'ctrl-prompt', text: optionLabel(q, options[index]) }));
     } else if (answered.text) {
       body.push(el('div', { class: 'ctrl-big', 'aria-hidden': 'true', text: '✍️' }));
       body.push(el('p', { class: 'ctrl-prompt', text: answered.text }));

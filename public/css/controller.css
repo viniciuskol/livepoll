@@ -261,6 +261,15 @@ body.ctrl-on { overflow: hidden; }
 }
 .sent-shape { width: 60px; height: 60px; background: rgba(11, 6, 32, 0.85); }
 
+/* A multiple_select confirms with every shape it marked. Three 96px tiles do
+   not fit a 390px phone side by side, so they shrink as the row grows and wrap
+   rather than overflow. */
+.sent-multi { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.sent-multi .sent-wrap { width: 72px; height: 72px; border-radius: 20px; }
+.sent-multi .sent-shape { width: 44px; height: 44px; }
+.sent-multi:has(.sent-wrap:nth-child(4)) .sent-wrap { width: 58px; height: 58px; border-radius: 16px; }
+.sent-multi:has(.sent-wrap:nth-child(4)) .sent-shape { width: 34px; height: 34px; }
+
 /* ---- reveal -------------------------------------------------------------- */
 .points {
   font-size: clamp(40px, 12vw, 62px); font-weight: 900; line-height: 1;

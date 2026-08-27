@@ -1,5 +1,5 @@
 // Builds the public room state payload (SPEC §5, SPEC-UX state table).
-import { getQuestions, getOptions, getPlayers } from './db.js';
+import { getQuestions, getOptions, getPlayers, isOnline, touchPresence, HEARTBEAT_MS } from './db.js';
 import { buildLeaderboard, rankOf, normalizeText } from './scoring.js';
 import { normalizeState, optionsVisible } from './flow.js';
 
@@ -88,6 +88,20 @@ export function maskPending(player, pending) {
 }
 
 /**
+ * Stamps the heartbeat, but only once the last one has aged out.
+ *
+ * The poll is the only evidence a phone is still in the room, and it arrives
+ * every 700ms. Writing on each one would put a row write on the hottest path in
+ * the app; the row we would need to read to decide is already in hand from the
+ * poll itself, so the check is free and the write happens ~once a beat.
+ */
+async function beat(env, roomId, playerToken, row, now = Date.now()) {
+  if (!row || !playerToken) return;
+  if ((row.last_seen || 0) >= now - HEARTBEAT_MS) return;
+  await touchPresence(env, roomId, playerToken, now);
+}
+
+/**
  * Recent reaction bubbles. `rooms.last_reaction_at` is already in hand from the
  * room row, so a room with no emoji in the last 5s costs zero extra queries.
  */
@@ -95,9 +109,13 @@ export async function recentReactions(env, room) {
   const cutoff = Date.now() - REACTION_WINDOW_MS;
   if (!room.last_reaction_at || room.last_reaction_at < cutoff) return [];
   const { results } = await env.DB.prepare(
-    'SELECT emoji, created_at FROM reactions WHERE room_id = ? AND created_at >= ? ORDER BY created_at LIMIT 60'
+    `SELECT r.emoji, r.created_at, p.nickname
+       FROM reactions r LEFT JOIN players p ON p.id = r.player_id
+      WHERE r.room_id = ? AND r.created_at >= ? ORDER BY r.created_at LIMIT 60`
   ).bind(room.id, cutoff).all();
-  return (results || []).map((r) => ({ emoji: r.emoji, at: r.created_at }));
+  // LEFT JOIN, not JOIN: a reaction outlives the player row it came from, and a
+  // nameless bubble is better than a bubble that vanishes.
+  return (results || []).map((r) => ({ emoji: r.emoji, at: r.created_at, nickname: r.nickname || '' }));
 }
 
 /**
@@ -122,12 +140,13 @@ export async function buildUnchanged(env, room, playerToken) {
     // is the hot path (one request per player per poll), so masking the open
     // question's points must not cost it an extra query.
     const me = await env.DB.prepare(
-      `SELECT p.id, p.nickname, p.avatar, p.score, p.streak, p.best_streak, p.rank_delta,
+      `SELECT p.id, p.nickname, p.avatar, p.score, p.streak, p.best_streak, p.rank_delta, p.last_seen,
               a.points AS pending_points, a.streak_before AS pending_streak
          FROM players p
          LEFT JOIN answers a ON a.player_id = p.id AND a.question_id = ?
         WHERE p.room_id = ? AND p.token = ?`
     ).bind(maskedQuestionId(room), room.id, String(playerToken)).first();
+    await beat(env, room.id, playerToken, me);
     if (me) {
       const pending = me.pending_points == null ? null : new Map([[me.id, { points: me.pending_points, streak_before: me.pending_streak }]]);
       const shown = maskPending(me, pending);
@@ -164,7 +183,10 @@ export async function buildState(env, room, { playerToken, isHost } = {}) {
     state,
     version: room.version,
     serverNow: Date.now(),
-    playerCount: players.length,
+    // Present players, not rows ever created: this is the denominator of
+    // "3 of 5 answered", and a phone that closed its browser must not hold the
+    // count open forever.
+    playerCount: players.filter((p) => isOnline(p)).length,
     totalQuestions: questions.length,
     totalBlocks: blockNames.length,
     questionIndex: index >= 0 ? index : null,
@@ -214,7 +236,7 @@ export async function buildState(env, room, { playerToken, isHost } = {}) {
       payload.missing = players
         .filter((p) => !sent.has(p.id))
         .slice(0, LOBBY_ROSTER_LIMIT)
-        .map((p) => ({ id: p.id, nickname: p.nickname, avatar: p.avatar || '' }));
+        .map((p) => ({ id: p.id, nickname: p.nickname, avatar: p.avatar || '', online: isOnline(p) }));
     }
   }
 
@@ -239,7 +261,7 @@ export async function buildState(env, room, { playerToken, isHost } = {}) {
     payload.players = [...players]
       .sort((a, b) => (b.joined_at || 0) - (a.joined_at || 0))
       .slice(0, LOBBY_ROSTER_LIMIT)
-      .map((p) => ({ id: p.id, nickname: p.nickname, avatar: p.avatar || '' }));
+      .map((p) => ({ id: p.id, nickname: p.nickname, avatar: p.avatar || '', online: isOnline(p) }));
   }
 
   payload.reactions = await recentReactions(env, room);
@@ -248,6 +270,7 @@ export async function buildState(env, room, { playerToken, isHost } = {}) {
     const row = await env.DB.prepare('SELECT * FROM players WHERE room_id = ? AND token = ?')
       .bind(room.id, String(playerToken))
       .first();
+    await beat(env, room.id, playerToken, row);
     if (row) {
       const me = maskPending(row, pending);
       let answered = null;

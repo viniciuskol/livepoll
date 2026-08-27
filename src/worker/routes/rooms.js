@@ -2,7 +2,7 @@
 import { json, fail, readJson, MAX_QUIZ_BODY_BYTES } from '../lib/http.js';
 import { generateRoomCode, generateToken, hashPassword, verifyPassword, isValidRoomCode } from '../lib/codes.js';
 import { validateQuiz } from '../lib/validation.js';
-import { getRoomByCode, getPlayers, bumpVersion, pickAvatar, MAX_PLAYERS } from '../lib/db.js';
+import { getRoomByCode, getPlayers, bumpVersion, pickAvatar, isOnline, MAX_PLAYERS } from '../lib/db.js';
 import { buildLeaderboard, rankOf } from '../lib/scoring.js';
 import { pendingAnswers, maskPending } from '../lib/state.js';
 import { sanitizeNickname, MAX_NICKNAME } from '../lib/text.js';
@@ -137,21 +137,48 @@ export async function joinRoom(request, env, code) {
   const nickname = sanitizeNickname(body.nickname, MAX_NICKNAME);
   if (nickname.length < 2) fail('VALIDATION_ERROR', 'Nickname too short', [{ field: 'nickname', code: 'err.nickname_short' }]);
 
+  const now = Date.now();
   const players = await getPlayers(env, room.id);
-  if (players.length >= MAX_PLAYERS) fail('ROOM_FULL', 'Room is full');
-  if (players.some((p) => p.nickname.toLowerCase() === nickname.toLowerCase())) {
-    fail('NICKNAME_TAKEN', 'Nickname already taken');
+
+  // Someone already answers to this name. If their phone is still polling it is
+  // a genuine clash; if it went quiet it is almost always the same person
+  // coming back - a closed browser, a dead battery, a QR rescanned into a
+  // different browser than the one holding the saved token. Handing the row
+  // back (new token, same id) returns them to their score and their answers
+  // instead of stranding them behind their own abandoned session.
+  //
+  // The trade this accepts: inside a room, during the offline window, the name
+  // is the only credential. That is the same trust model as walking up to the
+  // projector and reading the code off it, and the alternative - a player who
+  // drops at question three losing the game - is worse in the room this is for.
+  const clash = players.find((p) => p.nickname.toLowerCase() === nickname.toLowerCase());
+  if (clash) {
+    if (isOnline(clash, now)) fail('NICKNAME_TAKEN', 'Nickname already taken');
+    const token = generateToken(18);
+    await env.DB.prepare('UPDATE players SET token = ?, last_seen = ? WHERE id = ?')
+      .bind(token, now, clash.id).run();
+    // The roster paints presence, so a reclaim has to reach the stage.
+    await bumpVersion(env, room.id);
+    return json({
+      playerId: clash.id, playerToken: token, nickname: clash.nickname, avatar: clash.avatar || '',
+      code: room.code, title: room.title, resumed: true, score: clash.score,
+    });
   }
+
+  // Checked after the reclaim on purpose: a full room must still let its own
+  // players back in.
+  if (players.length >= MAX_PLAYERS) fail('ROOM_FULL', 'Room is full');
 
   const token = generateToken(18);
   const avatar = pickAvatar(players.length);
   try {
     const row = await env.DB.prepare(
-      'INSERT INTO players (room_id, nickname, token, avatar, joined_at) VALUES (?, ?, ?, ?, ?) RETURNING id'
-    ).bind(room.id, nickname, token, avatar, Date.now()).first();
+      'INSERT INTO players (room_id, nickname, token, avatar, joined_at, last_seen) VALUES (?, ?, ?, ?, ?, ?) RETURNING id'
+    ).bind(room.id, nickname, token, avatar, now, now).first();
     await bumpVersion(env, room.id);
-    return json({ playerId: row.id, playerToken: token, nickname, avatar, code: room.code, title: room.title });
+    return json({ playerId: row.id, playerToken: token, nickname, avatar, code: room.code, title: room.title, resumed: false });
   } catch (e) {
+    // Two phones racing on the same free nickname: the loser is a real clash.
     if (/UNIQUE/i.test(String(e && e.message))) fail('NICKNAME_TAKEN', 'Nickname already taken');
     throw e;
   }

@@ -144,19 +144,44 @@ export function vibrate(pattern) {
   if (navigator.vibrate && !reducedMotion()) navigator.vibrate(pattern);
 }
 
-/** Floating emoji reactions rendered in #fx-layer. */
-export function floatEmoji(emoji, count = 1) {
+/**
+ * Floating emoji reactions rendered in #fx-layer.
+ *
+ * `name` labels the bubble with whoever sent it, which is the whole point on
+ * the stage: a wall of anonymous emoji says the room is alive, a wall of named
+ * emoji says *who* is alive. The phone passes no name - it only ever floats the
+ * player's own tap, and telling you your own name is noise.
+ *
+ * The rise is deliberately slow. At 3s the bubbles crossed a projector in
+ * roughly the time it took to notice them, which read as flicker rather than
+ * applause; the tail below matches the CSS so a bubble is removed after it has
+ * finished, not during.
+ */
+const FLOAT_MS = 5200;
+const FLOAT_SPREAD_MS = 900;
+
+export function floatEmoji(emoji, count = 1, name = '') {
   const layer = document.getElementById('fx-layer');
   if (!layer || reducedMotion()) return;
   for (let i = 0; i < count; i++) {
     const node = document.createElement('span');
-    node.className = 'float-emoji';
-    node.textContent = emoji;
+    node.className = name ? 'float-emoji named' : 'float-emoji';
+    const glyph = document.createElement('span');
+    glyph.className = 'float-emoji-glyph';
+    glyph.textContent = emoji;
+    node.appendChild(glyph);
+    if (name) {
+      const tag = document.createElement('span');
+      tag.className = 'float-emoji-name';
+      tag.textContent = name;
+      node.appendChild(tag);
+    }
+    const delay = Math.random() * FLOAT_SPREAD_MS;
     node.style.left = `${6 + Math.random() * 88}%`;
-    node.style.animationDelay = `${Math.random() * 0.4}s`;
+    node.style.animationDelay = `${delay}ms`;
     node.style.fontSize = `${1.5 + Math.random() * 1.4}rem`;
     layer.appendChild(node);
-    setTimeout(() => node.remove(), 3600);
+    setTimeout(() => node.remove(), FLOAT_MS + delay + 200);
   }
 }
 

@@ -36,10 +36,42 @@ export async function getOptions(env, questionId) {
 
 export async function getPlayers(env, roomId) {
   const { results } = await env.DB.prepare(
-    `SELECT id, nickname, avatar, score, streak, best_streak, prev_rank, rank_delta, joined_at
+    `SELECT id, nickname, avatar, score, streak, best_streak, prev_rank, rank_delta, joined_at, last_seen
        FROM players WHERE room_id = ? ORDER BY score DESC, nickname`
   ).bind(roomId).all();
   return results || [];
+}
+
+/**
+ * A phone is considered gone this long after its last state poll. Generous
+ * next to the 700ms poll: a backgrounded tab, a tunnel or a slow hotspot must
+ * not be mistaken for someone who left the room.
+ */
+export const OFFLINE_MS = 20000;
+
+/**
+ * ...and a heartbeat is only written this often. D1 bills rows written, and
+ * every phone polls `/state` about 85 times a minute; without the throttle a
+ * room of 30 would spend ~2,500 writes a minute doing nothing but saying hello.
+ */
+export const HEARTBEAT_MS = 15000;
+
+/** True when this player has not polled recently enough to still be in the room. */
+export function isOnline(player, now = Date.now()) {
+  return ((player && (player.last_seen || player.joined_at)) || 0) >= now - OFFLINE_MS;
+}
+
+/**
+ * Stamps the heartbeat for whoever holds `token`.
+ *
+ * The `last_seen <` guard is what keeps this off the write path on most polls:
+ * SQLite matches no row, and the statement costs a lookup instead of a write.
+ */
+export async function touchPresence(env, roomId, token, now = Date.now()) {
+  if (!token) return;
+  await env.DB.prepare(
+    'UPDATE players SET last_seen = ? WHERE room_id = ? AND token = ? AND last_seen < ?'
+  ).bind(now, roomId, String(token), now - HEARTBEAT_MS).run();
 }
 
 // Emoji avatars handed out on join. Cheap identity: the phone shows it next to

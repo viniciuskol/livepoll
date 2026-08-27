@@ -29,7 +29,7 @@
     "nickname_placeholder": "Your name",
     "enter": "Enter",
     "reopen": "Reopen a control panel",
-    "eyebrow": "Live quiz · no sign-up · runs on your own machine"
+    "eyebrow": "Live quiz · Fast and Free · No sign-up"
   },
   "host": {
     "show_prompt_label": "Show the question on the phones",
@@ -170,7 +170,12 @@
     "chars_used": "{count} of {max} characters",
     "recap_title": "Your marks",
     "recap_missed": "Missed",
-    "partial_note": "{hits} of {total} correct"
+    "partial_note": "{hits} of {total} correct",
+    "selected_one": "1 option selected",
+    "selected_other": "{count} options selected",
+    "selected_none": "No option selected",
+    "rejoined": "Welcome back! Your score was kept.",
+    "session_lost": "Your session expired. Join again."
   },
   "lb": {
     "delta_up": "up {count}",
@@ -258,6 +263,7 @@
     "points_clamped": "Points \"{value}\" were adjusted to {clamped} (allowed: {min}-{max})"
   },
   "stage": {
+    "offline": "Left",
     "join_call": "Join at {url}",
     "players_here": "{count} in the room",
     "nobody_yet": "Waiting for the first player...",

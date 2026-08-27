@@ -149,7 +149,7 @@ body.stage-on { overflow: hidden; }
 }
 .scene > .stage-opts, .scene > .stage-lb, .scene > .podium,
 .scene > .roster, .scene > .open-wait, .scene > .block-card {
-  flex: 1 1 auto; min-height: 0;
+  min-height: 0;
 }
 /* ---- the prompt, and the length bands (PORT-PLAN D1) --------------------
    The prototype picks a size band from the prompt's length and then runs a
@@ -244,6 +244,10 @@ body.stage-on { overflow: hidden; }
 .roster.dense { gap: clamp(5px, 0.6vh, 9px); }
 .roster.dense .roster-chip { font-size: min(0.62em, 2.4vh); padding: 0.3em 0.6em; gap: 6px; }
 .roster-chip.more { background: transparent; border-style: dashed; color: var(--stage-muted); }
+/* Left the room: still named, because the presenter may be waiting on them,
+   but visibly not here. Faded rather than removed - a chip that vanishes the
+   moment a phone sleeps reads as a bug from the back of the room. */
+.roster-chip.gone { opacity: 0.42; border-style: dashed; filter: grayscale(1); }
 
 /* answering / reveal option grid */
 /* The row floor is `min(em, px/vh)`: a floor in px alone is a height the fit

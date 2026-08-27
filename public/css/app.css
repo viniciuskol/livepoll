@@ -633,7 +633,21 @@ input[type="file"]::file-selector-button {
 #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 40; overflow: hidden; }
 .confetti-piece { position: absolute; top: 0; left: 0; will-change: transform, opacity; }
 #fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 45; overflow: hidden; }
-.float-emoji { position: absolute; bottom: 0; font-size: 2rem; animation: float-up 3s var(--e-out) forwards; }
+/* The rise is 5.2s, matching fx.js FLOAT_MS. At 3s a bubble crossed a
+   projector faster than the room could look up at it. */
+.float-emoji {
+  position: absolute; bottom: 0; font-size: 2rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.1em;
+  animation: float-up 5.2s var(--e-out) forwards;
+}
+.float-emoji-glyph { line-height: 1; }
+/* Sized in em so the name tracks the bubble's own random scale. */
+.float-emoji-name {
+  font-size: 0.34em; font-weight: 700; line-height: 1; white-space: nowrap;
+  padding: 0.28em 0.6em; border-radius: 999px;
+  color: var(--text-0); background: rgba(4, 0, 16, 0.62);
+  border: 1px solid var(--glass-2); backdrop-filter: blur(4px);
+}
 
 .flash { position: fixed; inset: 0; z-index: 50; pointer-events: none; opacity: 0; }
 .flash.run { animation: flash 0.75s var(--e-out); }
@@ -672,7 +686,12 @@ input[type="file"]::file-selector-button {
 @keyframes opt-in { from { opacity: 0; transform: translateY(26px) scale(0.94); } to { opacity: 1; transform: none; } }
 @keyframes correct-pop { 0% { transform: scale(1); } 45% { transform: scale(1.08); } 100% { transform: scale(1.035); } }
 @keyframes slide-in { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes float-up { from { transform: translateY(0) scale(0.8); opacity: 1; } to { transform: translateY(-70vh) scale(1.4); opacity: 0; } }
+@keyframes float-up {
+  from { transform: translateY(0) scale(0.8); opacity: 0; }
+  12%  { opacity: 1; }
+  78%  { opacity: 1; }
+  to   { transform: translateY(-72vh) scale(1.25); opacity: 0; }
+}
 @keyframes zoom-out { from { transform: scale(2.2); opacity: 0; } 40% { opacity: 1; } to { transform: scale(0.7); opacity: 0; } }
 @keyframes flash { 0% { opacity: 0; } 18% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes ring-pulse { 50% { opacity: 0.55; } }

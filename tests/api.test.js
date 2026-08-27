@@ -6,7 +6,7 @@ import { createTestEnv, countQueries, jsonRequest, getRequest, call } from './he
 import { createRoom, joinRoom, hostLogin } from '../src/worker/routes/rooms.js';
 import { getState, submitAnswer, sendReaction, GRACE_MS } from '../src/worker/routes/play.js';
 import { hostAction, hostGrade, hostAnswers } from '../src/worker/routes/host.js';
-import { recomputePlayer } from '../src/worker/lib/db.js';
+import { recomputePlayer, OFFLINE_MS } from '../src/worker/lib/db.js';
 import { scoreAnswer } from '../src/worker/lib/scoring.js';
 import { clearLoginThrottle } from '../src/worker/routes/rooms.js';
 
@@ -487,4 +487,95 @@ test('the personal end-of-game summary is part of the player state', async () =>
   assert.equal(body.state, 'ended');
   assert.deepEqual(body.me.summary, { answered: 2, correct: 1, bestStreak: 1, score: body.me.score });
   assert.equal(body.me.rank, 1);
+});
+
+
+/* ------------------------------------------------------- presence & rejoin */
+
+/** Backdates a player's heartbeat, which is what "closed the browser" looks like. */
+function goOffline(env, nickname, ago = OFFLINE_MS + 1000) {
+  env.__sqlite.prepare('UPDATE players SET last_seen = ? WHERE nickname = ?')
+    .run(Date.now() - ago, nickname);
+}
+
+test('a player who dropped reclaims their nickname, their row and their score', async () => {
+  const env = createTestEnv();
+  const { code, hostToken } = await makeRoom(env, [mcQ('Q1'), mcQ('Q2')]);
+  const ana = await join(env, code, 'Ana');
+  await beginQuestion(env, code, hostToken);
+  await call(() => submitAnswer(jsonRequest(`${BASE}/${code}/answer`,
+    { playerToken: ana.playerToken, questionId: roomRow(env).current_question_id, choice: [1] }), env, code));
+  const scored = players(env)[0];
+  assert.ok(scored.score > 0, 'the first answer scored');
+
+  goOffline(env, 'Ana');
+  const back = await join(env, code, 'Ana');
+
+  assert.equal(back.resumed, true);
+  assert.equal(back.playerId, ana.playerId, 'the same row, not a second Ana');
+  assert.notEqual(back.playerToken, ana.playerToken, 'a fresh token is issued');
+  assert.equal(back.score, scored.score, 'the score survives the round trip');
+  assert.equal(players(env).length, 1, 'no duplicate player was created');
+
+  // The old token is dead, so a phone still holding it cannot keep playing.
+  const stale = await call(() => getState(getRequest('x'), env, code,
+    new URL(`${BASE}/${code}/state?playerToken=${ana.playerToken}`)));
+  assert.equal(stale.body.me, null);
+});
+
+test('a nickname whose phone is still polling is refused', async () => {
+  const env = createTestEnv();
+  const { code } = await makeRoom(env, [mcQ('Q1')]);
+  await join(env, code, 'Ana');
+  const dup = await call(() => joinRoom(jsonRequest(`${BASE}/${code}/join`, { nickname: 'Ana' }), env, code));
+  assert.equal(dup.body.error.code, 'NICKNAME_TAKEN');
+});
+
+test('the state poll is what keeps a player present', async () => {
+  const env = createTestEnv();
+  const { code } = await makeRoom(env, [mcQ('Q1')]);
+  const ana = await join(env, code, 'Ana');
+  goOffline(env, 'Ana');
+
+  const seenBefore = env.__sqlite.prepare('SELECT last_seen FROM players').get().last_seen;
+  await call(() => getState(getRequest('x'), env, code,
+    new URL(`${BASE}/${code}/state?playerToken=${ana.playerToken}`)));
+  const seenAfter = env.__sqlite.prepare('SELECT last_seen FROM players').get().last_seen;
+  assert.ok(seenAfter > seenBefore, 'the poll stamped the heartbeat');
+
+  // ...and a poll that arrives inside the throttle window does not write again.
+  const second = await countQueries(env, () => call(() => getState(getRequest('x'), env, code,
+    new URL(`${BASE}/${code}/state?playerToken=${ana.playerToken}`))));
+  assert.equal(env.__sqlite.prepare('SELECT last_seen FROM players').get().last_seen, seenAfter);
+  assert.ok(!env.__queries.log.slice(-second.queries).some((q) => /UPDATE players SET last_seen/.test(q)),
+    'no heartbeat write inside the throttle window');
+});
+
+test('playerCount counts phones in the room, not rows ever created', async () => {
+  const env = createTestEnv();
+  const { code } = await makeRoom(env, [mcQ('Q1')]);
+  await join(env, code, 'Ana');
+  await join(env, code, 'Bo');
+  const full = await call(() => getState(getRequest('x'), env, code, new URL(`${BASE}/${code}/state`)));
+  assert.equal(full.body.playerCount, 2);
+
+  goOffline(env, 'Bo');
+  const after = await call(() => getState(getRequest('x'), env, code, new URL(`${BASE}/${code}/state`)));
+  assert.equal(after.body.playerCount, 1, 'a closed browser stops holding the denominator open');
+  // Still named on the stage, but marked as gone.
+  const bo = (after.body.players || []).find((p) => p.nickname === 'Bo');
+  assert.equal(bo.online, false);
+});
+
+test('a reaction carries the nickname that sent it', async () => {
+  const env = createTestEnv();
+  const { code } = await makeRoom(env, [mcQ('Q1')]);
+  const ana = await join(env, code, 'Ana');
+  await call(() => sendReaction(jsonRequest(`${BASE}/${code}/reaction`,
+    { playerToken: ana.playerToken, emoji: '🔥' }), env, code));
+  const state = await call(() => getState(getRequest('x'), env, code, new URL(`${BASE}/${code}/state`)));
+  assert.deepEqual(
+    state.body.reactions.map((r) => [r.emoji, r.nickname]),
+    [['🔥', 'Ana']]
+  );
 });

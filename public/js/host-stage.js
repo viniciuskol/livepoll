@@ -9,6 +9,7 @@ import { drawQR } from './qr.js';
 import { createPoller } from './poll.js';
 import { confetti, sfx, floatEmoji, countdown, mountMuteButton } from './fx.js';
 import { fitRegion, watchRegion } from './fit.js';
+import { keepAwake } from './wake.js';
 
 const STORAGE_PREFIX = 'livepoll.host.';
 
@@ -113,6 +114,10 @@ export function startStage(code, hostToken) {
   );
   ctx.poller = poller;
   poller.start();
+  // The projector holds a single scene for minutes at a time and nobody
+  // touches this machine during a game, so without this the stage dims - or
+  // blanks - in the middle of a question.
+  keepAwake();
   onLangChange(() => {
     paintMute();
     labelControls();
@@ -297,10 +302,16 @@ function renderFooter(ctx, state) {
   $('#s-grade').disabled = state.state === 'lobby';
 }
 
-/** Floats only the reaction bubbles we have not shown yet. */
+/**
+ * Floats only the reaction bubbles we have not shown yet.
+ *
+ * The stage is the only screen that shows the room's reactions, so each bubble
+ * carries its sender's name - that is what turns a burst of emoji into
+ * something the presenter can react to out loud.
+ */
 function floatNewReactions(ctx, reactions) {
   const list = reactions || [];
-  list.forEach((r) => { if (r.at > ctx.seenReactions) floatEmoji(r.emoji, 1); });
+  list.forEach((r) => { if (r.at > ctx.seenReactions) floatEmoji(r.emoji, 1, r.nickname || ''); });
   if (list.length) ctx.seenReactions = Math.max(ctx.seenReactions, ...list.map((r) => r.at));
 }
 
@@ -419,15 +430,22 @@ function patchRoster(root, players, quiet) {
   let changed = false;
   players.forEach((p, i) => {
     seen.add(String(p.id));
-    if (root.querySelector(`[data-player="${p.id}"]`)) return;
+    const existing = root.querySelector(`[data-player="${p.id}"]`);
+    // Presence is the one thing about a chip that changes after it is drawn:
+    // a phone that closed its browser used to sit in the roster looking exactly
+    // like somebody standing in the room.
+    if (existing) { existing.classList.toggle('gone', p.online === false); return; }
     changed = true;
     root.insertBefore(el('span', {
-      class: 'roster-chip', 'data-player': p.id, style: `animation-delay:${Math.min(i, 8) * 45}ms`,
+      class: p.online === false ? 'roster-chip gone' : 'roster-chip',
+      'data-player': p.id,
+      style: `animation-delay:${Math.min(i, 8) * 45}ms`,
+      title: p.online === false ? t('stage.offline') : '',
     }, [
       el('span', { 'aria-hidden': 'true', text: p.avatar || '🙂' }),
       el('span', { text: p.nickname }),
     ]), root.firstChild);
-    if (!quiet) sfx.join();
+    if (!quiet && p.online !== false) sfx.join();
   });
   [...root.children].forEach((node) => {
     if (node.dataset.more) return;
