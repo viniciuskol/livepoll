@@ -11,15 +11,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bixtecnologia/aulao_agentes.git"
+    "url": "git+https://github.com/viniciuskol/livepoll.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/bixtecnologia/aulao_agentes/issues"
+    "url": "https://github.com/viniciuskol/livepoll/issues"
   },
-  "homepage": "https://github.com/bixtecnologia/aulao_agentes#readme",
+  "homepage": "https://github.com/viniciuskol/livepoll#readme",
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "wrangler": "^4.124.0"
