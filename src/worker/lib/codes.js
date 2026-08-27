@@ -37,7 +37,9 @@ export function generateToken(bytes = 24) {
   return s;
 }
 
-export const PBKDF2_ITERATIONS = 120000;
+// 100k is the ceiling Workers' WebCrypto enforces on PBKDF2; asking for more
+// throws at deriveBits() rather than degrading, so this is a hard limit.
+export const PBKDF2_ITERATIONS = 100000;
 const PBKDF2_HASH = 'SHA-256';
 const PBKDF2_BITS = 256;
 
