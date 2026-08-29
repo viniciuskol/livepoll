@@ -51,7 +51,7 @@ test('the host runs the stage and two players play a question through the new fl
   await expect(host.locator('.lobby-code')).toHaveText(code);
   await expect(host.locator('.lobby-qr canvas')).toBeVisible();
   await expect(host.locator('#s-qr')).toBeVisible();
-  await expect(host.locator('#s-primary')).toHaveText('Start the session');
+  await expect(host.locator('#s-primary')).toContainText('Start the session');
 
   const players = [];
   for (const nickname of ['Ana', 'Bruno']) players.push(await joinPlayer(browser, code, nickname, errors));
@@ -73,7 +73,7 @@ test('the host runs the stage and two players play a question through the new fl
     await expect(page.locator('#p-center')).not.toContainText('Red Planet');
     await expect(page.locator('.ctrl-opts')).toHaveCount(0);
   }
-  await expect(host.locator('#s-primary')).toHaveText('Show options');
+  await expect(host.locator('#s-primary')).toContainText('Show options');
 
   // 2) answering: options land on both screens and the clock starts.
   await host.click('#s-primary');
@@ -126,7 +126,7 @@ test('the host runs the stage and two players play a question through the new fl
   // ArrowLeft walks back to the reading screen and takes the options away.
   await host.locator('body').press('ArrowLeft');
   await expect(host.locator('.stage-opts')).toHaveCount(0);
-  await expect(host.locator('#s-primary')).toHaveText('Show options');
+  await expect(host.locator('#s-primary')).toContainText('Show options');
   // ? opens the shortcut overlay, Escape closes it.
   await host.locator('body').press('?');
   await expect(host.locator('.stage-overlay')).toContainText('Keyboard shortcuts');
@@ -220,13 +220,13 @@ test('a double advance only moves the room one step (P2-10)', async ({ browser }
   expect(codes).toContain('STALE_STATE');
   // reveal, not reveal-plus-leaderboard.
   await expect(host.locator('.stage-opts.revealed')).toBeVisible();
-  await expect(host.locator('#s-primary')).toHaveText('Show ranking');
+  await expect(host.locator('#s-primary')).toContainText('Show ranking');
   await expect(host.locator('.stage-lb')).toHaveCount(0);
 
   // The same through the UI: two fast clicks on the primary button.
   await Promise.all([host.click('#s-primary'), host.click('#s-primary', { force: true })]);
   await expect(host.locator('.stage-lb')).toBeVisible();
-  await expect(host.locator('#s-primary')).toHaveText('Finish the session');
+  await expect(host.locator('#s-primary')).toContainText('Finish the session');
   // The only console noise is the 409 of the race this test fires by hand: the
   // UI path drops the duplicate click before it reaches the network.
   expect(errors.filter((e) => !/409/.test(e))).toEqual([]);

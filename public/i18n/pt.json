@@ -186,7 +186,10 @@
     "player": "Participante",
     "score": "Pontos",
     "you": "Você",
-    "empty": "Ninguém pontuou ainda"
+    "empty": "Ninguém pontuou ainda",
+    "nobody_here": "Ninguém está na sala",
+    "nobody_note": "O código continua no alto da tela — quem entrar agora joga as perguntas que faltam.",
+    "nobody_note_ended": "A sessão terminou sem ninguém na sala."
   },
   "type": {
     "multiple_choice": "Escolha única",
@@ -270,7 +273,7 @@
     "read_aloud": "Leia em voz alta - as opções vêm a seguir",
     "read_aloud_open": "Leia em voz alta - a sala digita a resposta em seguida",
     "answers_in": "{count} de {total} responderam",
-    "block_card": "Bloco {index}",
+    "reading_time": "{seconds} s quando liberar",
     "block_count_one": "{count} pergunta neste bloco",
     "block_count_other": "{count} perguntas neste bloco",
     "champion": "Campeão",
@@ -287,6 +290,7 @@
     "ranking": "Ranking",
     "shortcuts": "Atalhos",
     "shortcuts_title": "Atalhos de teclado",
+    "key_space": "Espaço",
     "key_primary": "Próximo passo",
     "key_back": "Voltar um passo",
     "key_mute": "Silenciar o som",

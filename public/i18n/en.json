@@ -186,7 +186,10 @@
     "player": "Player",
     "score": "Score",
     "you": "You",
-    "empty": "No scores yet"
+    "empty": "No scores yet",
+    "nobody_here": "Nobody is in the room",
+    "nobody_note": "The code is still at the top of the screen — anyone joining now plays the questions that are left.",
+    "nobody_note_ended": "The session ended with no one in the room."
   },
   "type": {
     "multiple_choice": "Multiple choice",
@@ -270,7 +273,7 @@
     "read_aloud": "Read it out loud - the options come next",
     "read_aloud_open": "Read it out loud - the room types the answer next",
     "answers_in": "{count} of {total} answered",
-    "block_card": "Block {index}",
+    "reading_time": "{seconds} s once you open it",
     "block_count_one": "{count} question in this block",
     "block_count_other": "{count} questions in this block",
     "champion": "Champion",
@@ -287,6 +290,7 @@
     "ranking": "Ranking",
     "shortcuts": "Shortcuts",
     "shortcuts_title": "Keyboard shortcuts",
+    "key_space": "Space",
     "key_primary": "Next step",
     "key_back": "One step back",
     "key_mute": "Mute sound",

@@ -3,7 +3,7 @@
 // primary action. The keyboard is the primary interface - the presenter should
 // never have to hunt for a button in front of an audience.
 import { rooms, errorMessage } from './api.js';
-import { t, onLangChange } from './i18n.js';
+import { t, raw, onLangChange } from './i18n.js';
 import { $, el, show, toast, optionLabel, SHAPES, ringSvg, paintRing } from './ui.js';
 import { drawQR } from './qr.js';
 import { createPoller } from './poll.js';
@@ -264,6 +264,42 @@ function sceneKey(ctx, state) {
   return [state.state, q ? q.id : 0, lb ? 'lb' : '', state.state === 'lobby' ? 'lobby' : ''].join('|');
 }
 
+/**
+ * Writes an interpolated line into `node` with its substitutions picked out in
+ * `<b>` - "Question <b>4</b> of <b>8</b>", "<b>3</b> of <b>9</b> answered" -
+ * the way every chip and counter of the prototype is written
+ * (redesign/stage-answering.html, `.chip b` / `.answered-count b`). The figures
+ * are the only part of these lines anyone reads from the back of the room, and
+ * `t()` alone flattens them into the sentence at the sentence's own weight.
+ *
+ * The template comes from `raw()`, not from `t()`: by the time `t()` returns,
+ * the placeholders it would have to be split on are gone. A key with plural
+ * variants has no base template, so it falls back to the flat string rather
+ * than printing "{count}".
+ *
+ * `key: null` clears the node - the chips hide themselves with `:empty`.
+ *
+ * renderStrip() and patchScene() both run on every poll tick, so the line is
+ * rebuilt only when it actually changes: swapping the children of a chip
+ * several times a second resizes its box, and Playwright then never finds the
+ * element stable.
+ */
+function fillCount(node, key, vars) {
+  if (!node) return;
+  const line = key ? t(key, vars) : '';
+  if (node.dataset.line === line) return;
+  node.dataset.line = line;
+  const template = key ? raw(key) : '';
+  if (typeof template !== 'string' || !key) { node.textContent = line; return; }
+  node.textContent = '';
+  template.split(/(\{\w+\})/).filter(Boolean).forEach((part) => {
+    const name = /^\{(\w+)\}$/.exec(part);
+    node.appendChild(name && vars[name[1]] !== undefined
+      ? el('b', { text: String(vars[name[1]]) })
+      : document.createTextNode(part));
+  });
+}
+
 function renderStrip(ctx, state) {
   // A finished room refuses joins: the code and the QR go away with it, instead
   // of inviting latecomers into a session that is over (P2-6).
@@ -275,13 +311,17 @@ function renderStrip(ctx, state) {
   show($('#s-qr'), joinable);
   // On `block_intro` the block name *is* the slide - the strip chip would be
   // the third printing of the same string on one screen (SPEC-UX rule 5).
+  const named = state.state !== 'block_intro' && !!state.blockName;
   $('#s-block').textContent = state.state === 'block_intro'
     ? ''
-    : (state.blockName ? `${t('panel.block')}: ${state.blockName}` : (state.title || ''));
-  $('#s-qof').textContent = state.questionIndex != null && state.state !== 'ended'
-    ? t('panel.question_of', { index: state.questionIndex + 1, total: state.totalQuestions })
-    : '';
-  $('#s-players').textContent = t('stage.players_here', { count: state.playerCount });
+    : (named ? `${t('panel.block')}: ${state.blockName}` : (state.title || ''));
+  // The prototype's box glyph on the block chip, but only while the chip really
+  // is naming a block: in a quiz with no blocks the same chip carries the quiz
+  // title, and a box in front of a title labels the wrong noun.
+  $('#s-block').classList.toggle('is-block', named);
+  fillCount($('#s-qof'), state.questionIndex != null && state.state !== 'ended' ? 'panel.question_of' : null,
+    { index: (state.questionIndex || 0) + 1, total: state.totalQuestions });
+  fillCount($('#s-players'), 'stage.players_here', { count: state.playerCount });
   $('#s-state').textContent = t(`panel.state_${state.state}`);
 }
 
@@ -293,8 +333,25 @@ function renderFooter(ctx, state) {
     : 0;
   $('#s-progress').style.width = `${pct}%`;
 
+  // Space is the shortcut the whole stage is driven by (see the keydown handler
+  // above), and the presenter is looking at this button, not at the `?` sheet -
+  // so the button says so. It is `aria-hidden` because it is a visual hint: a
+  // screen reader reading "Start the sessionSpace" is worse than the `?` sheet,
+  // which is the list that exists to be read out.
+  //
+  // Rebuilt only when the label actually changes. renderFooter runs on every
+  // poll tick, and tearing the button down each time left it one frame wide
+  // enough for the label alone before the chip landed - a box that changes size
+  // several times a second is a button nothing can reliably click.
   const btn = $('#s-primary');
-  btn.textContent = t(primaryKey(state));
+  const label = t(primaryKey(state));
+  const shortcut = done ? '' : t('stage.key_space');
+  if (btn.dataset.label !== label || btn.dataset.shortcut !== shortcut) {
+    btn.dataset.label = label;
+    btn.dataset.shortcut = shortcut;
+    btn.textContent = label;
+    if (shortcut) btn.appendChild(el('span', { class: 'kbd', 'aria-hidden': 'true', text: shortcut }));
+  }
   btn.disabled = done;
   $('#s-back').disabled = !canGoBack(state);
   $('#s-end').disabled = done;
@@ -335,7 +392,7 @@ function patchScene(ctx, state) {
   const answers = $('#s-answers');
   if (answers) {
     const multi = state.question && state.question.type === 'multiple_select';
-    answers.textContent = t(multi ? 'stage.confirmed_in' : 'stage.answers_in',
+    fillCount(answers, multi ? 'stage.confirmed_in' : 'stage.answers_in',
       { count: state.answerCount, total: state.playerCount });
   }
   const tiles = $('#s-tiles');
@@ -353,21 +410,66 @@ function patchScene(ctx, state) {
   // twice on one screen, once in the chip and once under the join URL.
 }
 
+/* Decorative glyphs the lobby carries (redesign/stage-lobby.html). They are
+   written as escapes rather than literals so the file stays ASCII, and both are
+   `aria-hidden` where they are used: the sentence next to each one already says
+   the same thing. */
+const EMPTY_ROOM_GLYPH = '\u{1FA91}';
+const LINK_GLYPH = '\u{1F517}';
+const CAMERA_GLYPH = '\u{1F4F7}';
+
+/**
+ * The join call, with the room code picked out of the URL.
+ *
+ * `stage.join_call` is a sentence with the URL inside it ("Join at {url}"), and
+ * the code is a substring of that URL - the part a latecomer actually types.
+ * Building it as one string would flatten both facts into undifferentiated
+ * copy, so the sentence is split around its own placeholder (a sentinel keeps
+ * this working in every language, whatever side of the URL the prose falls on)
+ * and the URL is split around the code.
+ */
+function joinPill(ctx, code) {
+  const url = ctx.joinUrl.replace(/^https?:\/\//, '');
+  const MARK = '\u0000';
+  const [before = '', after = ''] = t('stage.join_call', { url: MARK }).split(MARK);
+  const cut = url.lastIndexOf(code);
+  const head = cut < 0 ? url : url.slice(0, cut);
+  const tail = cut < 0 ? '' : url.slice(cut);
+  // The sentence is one flex item, not three: the pill's `gap` separates the
+  // glyph from the copy, and letting it fall between the URL and the code
+  // instead printed the join address with a space in the middle of it.
+  return el('p', { class: 'lobby-join' }, [
+    el('span', { 'aria-hidden': 'true', text: LINK_GLYPH }),
+    el('span', {}, [
+      document.createTextNode(`${before}${head}`),
+      tail ? el('b', { text: tail }) : null,
+      after ? document.createTextNode(after) : null,
+    ]),
+  ]);
+}
+
 function sceneLobby(ctx, state) {
   const qr = el('canvas', { 'aria-label': t('panel.qr_label') });
-  const scene = el('div', { class: 'scene', 'data-fit-max': '2' }, [
+  // `data-fit-max: 1` because this scene sizes itself: every rule in the lobby
+  // block of stage.css is a viewport clamp rather than an `em` multiple of the
+  // scene unit, so there is nothing here for the fit search to grow.
+  const scene = el('div', { class: 'scene', 'data-fit-max': '1' }, [
     el('div', { class: 'lobby-grid' }, [
-      el('div', {}, [
+      el('div', { class: 'lobby-call' }, [
         el('p', { class: 'scene-kicker', text: t('panel.room_code') }),
         el('div', { class: 'lobby-code', text: state.code }),
-        el('p', { class: 'lobby-join', text: t('stage.join_call', { url: ctx.joinUrl.replace(/^https?:\/\//, '') }) }),
+        joinPill(ctx, state.code),
+        // Inside the invitation, under the link the newcomers came through.
+        el('div', { class: 'roster', id: 's-roster' }),
       ]),
-      el('div', {}, [
+      el('div', { class: 'lobby-qr-col' }, [
         el('div', { class: 'lobby-qr' }, qr),
-        el('p', { class: 'scene-note', text: t('panel.scan') }),
+        el('p', { class: 'scene-note' }, [
+          el('span', { 'aria-hidden': 'true', text: CAMERA_GLYPH }),
+          document.createTextNode(` ${t('panel.scan')}`),
+        ]),
       ]),
     ]),
-    el('div', { class: 'roster', id: 's-roster' }),
   ]);
   drawQR(qr, ctx.joinUrl, { scale: 6 });
   // Silent on the first paint: only a *new* arrival gets the sound.
@@ -488,9 +590,16 @@ function questionImage(q) {
 
 function sceneReading(ctx, state) {
   const q = state.question || {};
+  // The prototype's eyebrow carries two facts, not one: the answer type *and*
+  // how long the room gets once the options land. The timer ring only exists
+  // from `answering` on, so until then the clock was something the presenter
+  // had to remember; this is the one line already on the wall that can say it.
+  const kicker = q.timeLimit
+    ? `${t(`type.${q.type}`)} \u00b7 ${t('stage.reading_time', { seconds: q.timeLimit })}`
+    : t(`type.${q.type}`);
   // The prompt is the only thing on the stage here, so it gets the whole room.
   return el('div', { class: 'scene big-prompt', 'data-fit-max': '3.2' }, [
-    el('p', { class: 'scene-kicker', text: t(`type.${q.type}`) }),
+    el('p', { class: 'scene-kicker', text: kicker }),
     promptNode(q),
     questionImage(q),
     // The instruction reads as a control, not as fine print: the prototype's
@@ -507,12 +616,23 @@ function sceneBlockIntro(ctx, state) {
   const inBlock = ctx.quiz
     ? (ctx.quiz.questions || []).filter((q) => q.blockName === state.blockName).length
     : 0;
+  // The prototype's `cartela`: the block *number* is the hero and the name sits
+  // under it as a plain title. The number is zero-padded ("02", not "2") so the
+  // hero keeps the same width from block 2 to block 12 and the centred card
+  // does not shift sideways mid-quiz. It is not aria-hidden: read after the
+  // "Bloco" eyebrow it is the only thing that says which block this is.
+  const index = (state.blockIndex || 0) + 1;
   return el('div', { class: 'scene', 'data-fit-max': '3' }, [
     el('div', { class: 'block-card' }, [
-      el('p', { class: 'block-index', text: t('stage.block_card', { index: (state.blockIndex || 0) + 1 }) }),
+      el('p', { class: 'scene-kicker', text: t('panel.block') }),
+      el('div', { class: 'block-num', text: String(index).padStart(2, '0') }),
       el('h1', { class: 'block-name', text: state.blockName || '' }),
-      el('div', { class: 'block-rule', 'aria-hidden': 'true' }),
-      inBlock ? el('p', { class: 'scene-note', text: t('stage.block_count', { count: inBlock }) }) : null,
+      // The cup is the prototype's "respire fundo" beat - the one decoration
+      // that tells the room this screen is a pause, not a question they missed.
+      inBlock ? el('p', { class: 'scene-note block-sub' }, [
+        el('span', { text: t('stage.block_count', { count: inBlock }) }),
+        el('span', { 'aria-hidden': 'true', text: '\u2615' }),
+      ]) : null,
     ]),
   ]);
 }
@@ -532,7 +652,10 @@ function optionNode(q, option, i, revealed, share) {
   // first tap: an empty checkbox on every card is the only cue on the wall that
   // says "more than one of these" without reading the hint (D3's sibling case).
   const multi = q.type === 'multiple_select';
-  return el('div', { class: cls, style: `animation-delay:${i * 70}ms` }, [
+  // The prototype's stagger (neon.css `.opt:nth-child(n)`): 50 ms before the
+  // first card and 90 ms between them, so the grid reads as four cards landing
+  // one after another rather than as one block fading in.
+  return el('div', { class: cls, style: `animation-delay:${50 + i * 90}ms` }, [
     el('span', { class: `shape ${SHAPES[i % SHAPES.length]}`, 'aria-hidden': 'true' }),
     multi && !revealed ? el('span', { class: 'check', 'aria-hidden': 'true', text: '✓' }) : null,
     el('span', { class: 'txt', text: optionLabel(q, option) }),
@@ -622,13 +745,17 @@ function sceneAnswering(ctx, state) {
       // options marked and nothing confirmed has *not* answered, and the
       // counter is the only thing telling the presenter whether the room is
       // still working or already done.
-      el('span', {
-        class: 'stage-answers', id: 's-answers', 'aria-live': 'off',
-        text: t(multi ? 'stage.confirmed_in' : 'stage.answers_in',
-          { count: state.answerCount, total: state.playerCount }),
-      }),
+      answersNode(state, multi),
     ]),
   ]);
+}
+
+/** The answer counter, with its two figures picked out (see fillCount). */
+function answersNode(state, multi) {
+  const node = el('span', { class: 'stage-answers', id: 's-answers', 'aria-live': 'off' });
+  fillCount(node, multi ? 'stage.confirmed_in' : 'stage.answers_in',
+    { count: state.answerCount, total: state.playerCount });
+  return node;
 }
 
 /**
@@ -745,7 +872,16 @@ function sceneReveal(ctx, state) {
     children.push(el('div', { class: gridClass(q, options, true) },
       options.map((o, i) => optionNode(q, o, i, true, shareOf(o.position)))));
   }
-  if (q.explanation) children.push(el('p', { class: 'explain', text: `${t('panel.explanation')}: ${q.explanation}` }));
+  // The label is a `<b>`, not part of the sentence: `.explain b` is the bright
+  // ink and the body is the soft one (app.css), so the room's eye lands on the
+  // prose instead of on a flat run where "Explanation:" carries the same weight
+  // as the reason itself - the prototype's `<b>Por que:</b> ...`.
+  if (q.explanation) {
+    children.push(el('p', { class: 'explain' }, [
+      el('b', { text: `${t('panel.explanation')}:` }),
+      ` ${q.explanation}`,
+    ]));
+  }
   return el('div', { class: 'scene', 'data-fit-max': '1.7' }, children);
 }
 
@@ -762,10 +898,33 @@ function deltaNode(delta) {
   });
 }
 
+/**
+ * The wall when the standings come back empty.
+ *
+ * They only can when the room itself is empty: `buildLeaderboard` carries every
+ * player, scored or not, so a room with people in it always has rows even if
+ * every score is zero. "No scores yet" was therefore describing a fact that
+ * cannot happen, and it described it *inside a ranking row* - a bare `<li>` in a
+ * five-column grid, which put the sentence in the 2.4em rank track and rendered
+ * one broken 360px card with three wrapped lines in its left margin.
+ *
+ * What the presenter actually needs, looking up at an empty board, is to know
+ * whether the thing is broken or the room is: hence the diagnosis, plus the one
+ * thing still working - joining stays open until the session ends, so a code
+ * that is already on the strip can still fill the room.
+ */
+function sceneEmptyRoom(noteKey) {
+  return el('div', { class: 'scene empty-room', 'data-fit-max': '1.4' }, [
+    el('span', { class: 'empty-glyph', 'aria-hidden': 'true', text: EMPTY_ROOM_GLYPH }),
+    el('p', { class: 'empty-head', text: t('lb.nobody_here') }),
+    el('p', { class: 'scene-note', text: t(noteKey) }),
+  ]);
+}
+
 function sceneLeaderboard(ctx, state) {
   const rows = (state.leaderboard || []).slice(0, 5);
+  if (!rows.length) return sceneEmptyRoom('lb.nobody_note');
   const list = el('ol', { class: 'stage-lb' });
-  if (!rows.length) list.appendChild(el('li', { text: t('lb.empty') }));
   // How far behind the leader each row is, as a lane along the bottom edge of
   // the row: the numbers alone do not say whether second place is 20 points or
   // 2000 points away, which is the whole tension of a ranking slide. Absolutely
@@ -875,13 +1034,23 @@ function sceneEnded(ctx, state) {
             el('span', { 'aria-hidden': 'true', class: 'cup', text: '\u{1f3c6}' }),
             el('span', { class: 'who', text: `${champion.avatar || ''} ${champion.nickname}`.trim() }),
           ])
-        : el('p', { class: 'scene-note', text: t('lb.empty') }),
-      el('p', { class: 'scene-note', text: t('panel.podium_cheer') }),
+        : el('p', { class: 'empty-head', text: t('lb.nobody_here') }),
+      // "And the winner is..." printed under "nobody is in the room" was the
+      // stage contradicting itself on the one slide it cannot take back. The
+      // cheer only makes sense with somebody to cheer for; without one the line
+      // states what happened, because the finale is also the record of it.
+      el('p', { class: 'scene-note', text: champion ? t('panel.podium_cheer') : t('lb.nobody_note_ended') }),
     ]),
-    podium,
+    // An empty room builds an empty podium, and `.podium` still claims the floor
+    // it would have stood on - which left a hand's width of nothing between the
+    // headline and the thanks, reading as a slide that half-loaded.
+    stageOrder.length ? podium : null,
     el('p', { class: 'scene-note finale-thanks', text: t('stage.thanks') }),
   ]);
-  return el('div', { class: `scene finale${rest.length ? '' : ' solo'}`, 'data-fit-max': '1.6' }, [main, side]);
+  return el('div', {
+    class: `scene finale${rest.length ? '' : ' solo'}${stageOrder.length ? '' : ' no-podium'}`,
+    'data-fit-max': '1.6',
+  }, [main, side]);
 }
 
 /* ----------------------------------------------------------------- grading */
@@ -984,7 +1153,12 @@ function gradingBlock(ctx, questionId, groups, answerKey, opts = {}) {
   wrap.setAttribute('tabindex', '0');
   wrap.setAttribute('role', 'group');
   wrap.setAttribute('aria-label', t('panel.grading_title'));
-  return el('div', { class: 'scene', style: 'gap:10px' }, [
+  // `grade-scene` only marks the block for CSS: the grading hints are chips on
+  // the projector, not paragraphs, and without a class of its own the rules had
+  // to reach them through `.scene > .scene > p`, which also matched the reveal's
+  // own notes. No node moves - the focus order the keyboard tests walk is the
+  // order below.
+  return el('div', { class: 'scene grade-scene', style: 'gap:10px' }, [
     // The overlay already carries this string in its <h2>, two lines up.
     opts.titled === false ? null : el('p', { class: 'scene-kicker', text: t('panel.grading_title') }),
     keys.length ? el('p', { class: 'scene-note', text: `${t('panel.answer_key')}: ${keys.join(', ')}` }) : null,
